@@ -19,6 +19,7 @@ NC="${ESC}[0m"
 COST_PER_1M=3.00   # Claude Sonnet baseline
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
+stderr() { echo -e "$@" >&2; }
 draw_bar() {
     local pct=$1   # 0-100
     local width=40
@@ -116,10 +117,10 @@ load_or_init_stats() {
     if [ -f "$STATS_FILE" ]; then
         SESSIONS=$(grep -o '"sessions"[ :]*[0-9]*' "$STATS_FILE" | cut -d: -f2 | tr -d ' ' || echo 0)
         CUMULATIVE_SAVED=$(grep -o '"cumulative_saved"[ :]*[0-9]*' "$STATS_FILE" | cut -d: -f2 | tr -d ' ' || echo 0)
-        INSTALL_DATE=$(grep -o '"installed"[ :]*"[^"]*"' "$STATS_FILE" | cut -d'"' -f4 || echo "unknown")
-        # Fallbacks in case of empty values
+        INSTALL_DATE=$(grep -o '"installed"[ :]*"[^"]*"' "$STATS_FILE" | cut -d'"' -f4 || echo "")
         [ -z "$SESSIONS" ] && SESSIONS=0
         [ -z "$CUMULATIVE_SAVED" ] && CUMULATIVE_SAVED=0
+        [ -z "$INSTALL_DATE" ] && INSTALL_DATE=$(date +"%Y-%m-%d")
         
         # Load history array
         local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' "$STATS_FILE" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
@@ -306,19 +307,19 @@ show_dashboard() {
     
     local sonnet_sess=$(cost_usd_rate $SAVED_TOKENS 3.00)
     local sonnet_cum=$(cost_usd_rate $CUMULATIVE_SAVED 3.00)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude 3.5 Sonnet" "\$3.00" "\$${sonnet_sess}" "\$${sonnet_cum}"
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Sonnet 4" "\$3.00" "\$${sonnet_sess}" "\$${sonnet_cum}"
     
     local opus_sess=$(cost_usd_rate $SAVED_TOKENS 15.00)
     local opus_cum=$(cost_usd_rate $CUMULATIVE_SAVED 15.00)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude 3.0 Opus" "\$15.00" "\$${opus_sess}" "\$${opus_cum}"
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Opus 4" "\$15.00" "\$${opus_sess}" "\$${opus_cum}"
     
     local gemini_sess=$(cost_usd_rate $SAVED_TOKENS 1.25)
     local gemini_cum=$(cost_usd_rate $CUMULATIVE_SAVED 1.25)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Gemini 1.5 Pro" "\$1.25" "\$${gemini_sess}" "\$${gemini_cum}"
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Gemini 2.5 Pro" "\$1.25" "\$${gemini_sess}" "\$${gemini_cum}"
     
-    local gpt4o_sess=$(cost_usd_rate $SAVED_TOKENS 2.50)
-    local gpt4o_cum=$(cost_usd_rate $CUMULATIVE_SAVED 2.50)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "GPT-4o" "\$2.50" "\$${gpt4o_sess}" "\$${gpt4o_cum}"
+    local gpt4o_sess=$(cost_usd_rate $SAVED_TOKENS 2.00)
+    local gpt4o_cum=$(cost_usd_rate $CUMULATIVE_SAVED 2.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "GPT-4.1" "\$2.00" "\$${gpt4o_sess}" "\$${gpt4o_cum}"
     echo ""
 
     # ── Memory state ──
@@ -1499,20 +1500,20 @@ EOF
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
                         <div class="model-select-grid">
                             <button class="model-btn active" data-model="sonnet">
-                                <h4>Claude 3.5 Sonnet</h4>
+                                <h4>Claude Sonnet 4</h4>
                                 <p>$3.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="opus">
-                                <h4>Claude 3.0 Opus</h4>
+                                <h4>Claude Opus 4</h4>
                                 <p>$15.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="gemini">
-                                <h4>Gemini 1.5 Pro</h4>
+                                <h4>Gemini 2.5 Pro</h4>
                                 <p>$1.25/1M</p>
                             </button>
                             <button class="model-btn" data-model="gpt4o">
-                                <h4>GPT-4o</h4>
-                                <p>$2.50/1M</p>
+                                <h4>GPT-4.1</h4>
+                                <p>$2.00/1M</p>
                             </button>
                         </div>
                     </div>
@@ -1555,7 +1556,7 @@ EOF
         
         <!-- Footer -->
         <footer>
-            <p>Tokenso Context Optimizer CLI v2.1.0 — Powered by Bash & Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank">GitHub</a>.</p>
+            <p>Tokenso Context Optimizer CLI v2.2.0 — Powered by Bash & Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank">GitHub</a>.</p>
         </footer>
     </div>
     
@@ -1660,10 +1661,10 @@ EOF
         
         // ROI Simulator engine
         const models = {
-            sonnet: { name: 'Claude 3.5 Sonnet', rate: 3.00 },
-            opus: { name: 'Claude 3.0 Opus', rate: 15.00 },
-            gemini: { name: 'Gemini 1.5 Pro', rate: 1.25 },
-            gpt4o: { name: 'GPT-4o', rate: 2.50 }
+            sonnet: { name: 'Claude Sonnet 4', rate: 3.00 },
+            opus: { name: 'Claude Opus 4', rate: 15.00 },
+            gemini: { name: 'Gemini 2.5 Pro', rate: 1.25 },
+            gpt4o: { name: 'GPT-4.1', rate: 2.00 }
         };
         let selectedModel = 'sonnet';
         

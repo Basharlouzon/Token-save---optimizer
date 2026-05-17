@@ -10,4 +10,5 @@
 ./scripts/apply-cross-rules.sh
 ./SKILL.md
 ./.geminirules
+./.kilorules
 ./tokenso-dashboard.html

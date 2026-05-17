@@ -16,6 +16,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ─── Force tty for piped installs ──────────────────────────────────────────
+if [ ! -t 0 ]; then
+  exec < /dev/tty
+fi
+
 # ─── Colors ────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; BGREEN='\033[1;32m'
 BLUE='\033[0;34m';  BBLUE='\033[1;34m'
@@ -27,32 +32,31 @@ NC='\033[0m'
 
 # ─── ASCII Banner ──────────────────────────────────────────────────────────
 if [ "$UNATTENDED" = false ]; then
-    clear
-    echo -e "${BBLUE}"
-    echo "  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ "
-    echo "  ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║██╔═══██╗"
-    echo "     ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║██║   ██║"
-    echo "     ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║"
-    echo "     ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝"
-    echo "     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ "
-    echo -e "${NC}${DIM}               Save Optimizer Global Installer${NC}"
-    echo ""
+    clear >&2
+    echo -e "${BBLUE}" >&2
+    echo "  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ " >&2
+    echo "  ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║██╔═══██╗" >&2
+    echo "     ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║██║   ██║" >&2
+    echo "     ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║" >&2
+    echo "     ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝" >&2
+    echo "     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ " >&2
+    echo -e "${NC}${DIM}               Save Optimizer Global Installer${NC}" >&2
+    echo "" >&2
 fi
 
 # ─── Helper Functions ──────────────────────────────────────────────────────
 step_start() {
-    echo -e "  ${YELLOW}○${NC}  $1..."
+    echo -e "  ${YELLOW}○${NC}  $1..." >&2
 }
 
 step_done() {
-    # Move cursor up 1 line and clear it to render checked state
-    printf "\033[1A\033[K"
-    echo -e "  ${GREEN}✓${NC}  $1"
+    printf "\033[1A\033[K" >&2
+    echo -e "  ${GREEN}✓${NC}  $1" >&2
 }
 
 step_failed() {
-    printf "\033[1A\033[K"
-    echo -e "  ${RED}✗${NC}  ${RED}Failed: $1${NC}"
+    printf "\033[1A\033[K" >&2
+    echo -e "  ${RED}✗${NC}  ${RED}Failed: $1${NC}" >&2
 }
 
 # ─── 1. System Environment Scan ───────────────────────────────────────────
@@ -87,7 +91,7 @@ if [ -f "bin/tokenso" ]; then
 else
     if [ ! -w "$INSTALL_DIR" ]; then
         if [ "$UNATTENDED" = false ]; then
-            echo -e "  ${YELLOW}🔑 Sudo privileges required to install to $INSTALL_DIR...${NC}"
+            echo -e "  ${YELLOW}🔑 Sudo privileges required to install to $INSTALL_DIR...${NC}" >&2
         fi
         sudo curl -sSL "$CLI_URL" -o "$INSTALL_DIR/tokenso"
         sudo chmod +x "$INSTALL_DIR/tokenso"
@@ -194,13 +198,13 @@ elif [ "$current_shell" = "bash" ]; then
     fi
 fi
 [ -z "$PROFILE" ] && [ -f "$HOME/.profile" ] && PROFILE="$HOME/.profile"
-[ -z "$PROFILE" ] && PROFILE="$HOME/.zshrc" # Default fallback
+[ -z "$PROFILE" ] && PROFILE="$HOME/.zshrc"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     step_done "Shell profile scanned (${YELLOW}PATH insertion needed${NC})"
-    echo ""
+    echo "" >&2
     if [ "$UNATTENDED" = false ]; then
-        echo -e "  ${YELLOW}⚠️  Warning: $INSTALL_DIR is not in your current PATH.${NC}"
+        echo -e "  ${YELLOW}⚠️  Warning: $INSTALL_DIR is not in your current PATH.${NC}" >&2
     fi
     
     if [ "$UNATTENDED" = true ]; then
@@ -208,30 +212,27 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         echo "" >> "$PROFILE"
         echo "# Tokenso CLI PATH configuration" >> "$PROFILE"
         echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$PROFILE"
-        echo -e "  ${GREEN}✓ Shell profile ($PROFILE) automatically updated (unattended)!${NC}"
-    elif [ -t 0 ]; then
+        echo -e "  ${GREEN}✓ Shell profile ($PROFILE) automatically updated (unattended)!${NC}" >&2
+    else
         read -p "  Would you like to automatically append it to your $PROFILE? [Y/n]: " path_choice
         if [[ ! "$path_choice" =~ ^[Nn]$ ]]; then
             [ -f "$PROFILE" ] || touch "$PROFILE"
             echo "" >> "$PROFILE"
             echo "# Tokenso CLI PATH configuration" >> "$PROFILE"
             echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$PROFILE"
-            echo -e "  ${GREEN}✓ Shell profile ($PROFILE) updated successfully!${NC}"
-            echo -e "  ${YELLOW}💡 Please run 'source $PROFILE' or restart terminal to load the global path.${NC}"
+            echo -e "  ${GREEN}✓ Shell profile ($PROFILE) updated successfully!${NC}" >&2
+            echo -e "  ${YELLOW}💡 Please run 'source $PROFILE' or restart terminal to load the global path.${NC}" >&2
         else
-            echo -e "  ${DIM}Skipped profile configuration.${NC}"
+            echo -e "  ${DIM}Skipped profile configuration.${NC}" >&2
         fi
-    else
-        echo -e "  To run tokenso globally, manually add this to your shell profile:"
-        echo -e "    ${CYAN}export PATH=\"\$PATH:$INSTALL_DIR\"${NC}"
     fi
 else
     step_done "Shell profile scanned (PATH matches ${GREEN}OK${NC})"
     if [ "$UNATTENDED" = false ]; then
-        echo ""
-        echo -e "  ${BGREEN}✨ Tokenso global command is fully active!${NC}"
-        echo -e "  You can run ${CYAN}tokenso${NC} or ${CYAN}tokenso run${NC} directly from any repository workspace."
-        echo ""
+        echo "" >&2
+        echo -e "  ${BGREEN}✨ Tokenso global command is fully active!${NC}" >&2
+        echo -e "  You can run ${CYAN}tokenso${NC} or ${CYAN}tokenso run${NC} directly from any repository workspace." >&2
+        echo "" >&2
     fi
 fi
 
@@ -242,7 +243,7 @@ if [ -f "$PROFILE" ]; then
         echo "# Tokenso CLI completion configuration" >> "$PROFILE"
         echo "[ -f \"\$HOME/.tokenso_completion.sh\" ] && source \"\$HOME/.tokenso_completion.sh\"" >> "$PROFILE"
         if [ "$UNATTENDED" = false ]; then
-            echo -e "  ${GREEN}✓ Shell autocomplete configuration appended to $PROFILE.${NC}"
+            echo -e "  ${GREEN}✓ Shell autocomplete configuration appended to $PROFILE.${NC}" >&2
         fi
     fi
 else
@@ -254,18 +255,18 @@ else
 fi
 
 # ─── 6. Immediate Local Setup Onboarding ──────────────────────────────────
-if [ "$UNATTENDED" = false ] && [ -t 0 ]; then
+if [ "$UNATTENDED" = false ]; then
     read -p "  Would you like to configure Tokenso AI memory in the current workspace now? [y/N]: " configure_now
     if [[ "$configure_now" =~ ^[yY](es)?$ ]]; then
-        echo ""
+        echo "" >&2
         "$INSTALL_DIR/tokenso" install
     fi
 fi
 
 if [ "$UNATTENDED" = false ]; then
-    echo ""
-    echo -e "${BBLUE}======================================================${NC}"
-    echo -e "${BGREEN}🎉 Installation Completed!${NC}"
-    echo -e "  Star the repo ⭐  ${DIM}github.com/Basharlouzon/Token-save---optimizer${NC}"
-    echo -e "${BBLUE}======================================================${NC}\n"
+    echo "" >&2
+    echo -e "${BBLUE}======================================================${NC}" >&2
+    echo -e "${BGREEN}🎉 Installation Completed!${NC}" >&2
+    echo -e "  Star the repo ⭐  ${DIM}github.com/Basharlouzon/Token-save---optimizer${NC}" >&2
+    echo -e "${BBLUE}======================================================${NC}\n" >&2
 fi

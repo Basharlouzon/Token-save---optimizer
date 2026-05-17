@@ -1,57 +1,71 @@
 #!/bin/bash
 # apply-cross-rules.sh
-# Injects Tokenso context-optimizer rules into Cline, Roo, and Claude Code config files.
+# Injects Tokenso context-optimizer rules into all supported AI agent config files.
 
 TARGET_DIR="${1:-.}"
 
 RULES=$(cat << 'EOF'
 
-# ==============================================================
-# 🧠 TOKENSO — CONTEXT OPTIMIZER & ACTIVE MEMORY RULES
-# ==============================================================
-# These rules enforce maximum efficiency, preventing context window bloat 
-# and stopping AI agents from repeating themselves or looping.
-
-- **Zero-Waste Searching**: Do not read full files blindly. Check file size first. Use targeted searches (`grep_search`, `rg`) to locate file names, then read only specific line ranges.
-- **Smart Mapping**: If you need to understand the project structure, do not run `ls -R` or `find`. Instead, execute `tokenso map` to visualize the lightweight, colorized tree hierarchy from `.ai-memory/repo-map.txt`.
-- **Active Memory Protocol**: Before starting any task, read the current AI Memory using `tokenso state` (or checking `.ai-memory/state.md`). Upon reaching a milestone, fixing a bug, or taking complex steps, update the memory with `tokenso save "[Milestone Message]"` to compress findings.
-- **Prune & Progress**: After saving state, explicitly offload previous raw context from your thinking. Focus only on the active checklist. If you detect that you are repeating failed commands or stuck in a loop, STOP, update the state, and ask the user for clarification.
+# ==========================================
+# TOKENSO CONTEXT OPTIMIZER RULES
+# ==========================================
+- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
+- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
+- **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
+- **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
 EOF
 )
 
+MARKER="TOKENSO CONTEXT OPTIMIZER RULES"
+
+inject_rules() {
+    local file=$1
+    local name=$2
+    local full_path="$TARGET_DIR/$file"
+    local full_dir
+    full_dir=$(dirname "$full_path")
+    
+    if [ -f "$full_path" ]; then
+        if ! grep -q "$MARKER" "$full_path"; then
+            echo "$RULES" >> "$full_path"
+            echo "  ✅ Updated $name → $file"
+        else
+            echo "  ⚡ $name already configured."
+        fi
+    else
+        mkdir -p "$full_dir"
+        echo "$RULES" > "$full_path"
+        echo "  ✅ Created $name → $file"
+    fi
+}
+
 echo "Injecting Tokenso Context Optimizer rules into AI assistant configs in $TARGET_DIR..."
 
-# Inject into Cline
-if [ -f "$TARGET_DIR/.clinerules" ]; then
-  if ! grep -q "TOKENSO CONTEXT OPTIMIZER RULES" "$TARGET_DIR/.clinerules"; then
-    echo "$RULES" >> "$TARGET_DIR/.clinerules"
-    echo "Updated .clinerules"
-  fi
-else
-  echo "$RULES" > "$TARGET_DIR/.clinerules"
-  echo "Created .clinerules"
-fi
+echo ""
+echo "  AI Coding Agents:"
+inject_rules ".claudecode"              "Claude Code"
+inject_rules "CLAUDE.md"                "Claude Code (CLAUDE.md)"
+inject_rules ".clinerules"              "Cline"
+inject_rules ".roomodes"                "Roo Code"
+inject_rules ".kilorules"               "Kilo"
+inject_rules ".geminirules"             "Gemini CLI / Antigravity"
+inject_rules ".opencode"                "Open Code"
+inject_rules "CONVENTIONS.md"           "Aider (CONVENTIONS.md)"
+inject_rules ".continue/config.yaml"    "Continue.dev"
 
-# Inject into Roo
-if [ -f "$TARGET_DIR/.roomodes" ]; then
-  if ! grep -q "TOKENSO CONTEXT OPTIMIZER RULES" "$TARGET_DIR/.roomodes"; then
-    echo "$RULES" >> "$TARGET_DIR/.roomodes"
-    echo "Updated .roomodes"
-  fi
-else
-  echo "$RULES" > "$TARGET_DIR/.roomodes"
-  echo "Created .roomodes"
-fi
+echo ""
+echo "  AI-Powered Editors:"
+inject_rules ".cursorrules"                   "Cursor"
+inject_rules ".cursor/rules/token-optimizer.mdc" "Cursor (rules/)"
+inject_rules ".windsurfrules"                 "Windsurf"
+inject_rules ".voidrules"                     "Void Editor"
+inject_rules ".zed/assistant-rules.md"        "Zed AI"
+inject_rules ".pearai"                        "PearAI"
 
-# Inject into Claude Code
-if [ -f "$TARGET_DIR/.claudecode" ]; then
-  if ! grep -q "TOKENSO CONTEXT OPTIMIZER RULES" "$TARGET_DIR/.claudecode"; then
-    echo "$RULES" >> "$TARGET_DIR/.claudecode"
-    echo "Updated .claudecode"
-  fi
-else
-  echo "$RULES" > "$TARGET_DIR/.claudecode"
-  echo "Created .claudecode"
-fi
+echo ""
+echo "  Enterprise & Cloud:"
+inject_rules ".github/copilot-instructions.md"  "GitHub Copilot"
+inject_rules ".amazonq/rules/token-optimizer.md" "Amazon Q Developer"
 
+echo ""
 echo "Tokenso cross-agent rules successfully applied."

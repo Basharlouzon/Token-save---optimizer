@@ -74,7 +74,7 @@ When you run `tokenso run`, Tokenso visually maps the relationships and files in
      ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║
      ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝
      ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ 
-           Cognitive Mindmap Search  v1.0.0
+            Cognitive Mindmap Search  v2.2.0
 
   🔍 Scanning project workspace for AI Mindmap nodes...
     ● Discovered [Workspace Code] ... Logic structures & codebase symbols

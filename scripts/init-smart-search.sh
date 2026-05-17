@@ -32,7 +32,7 @@ fi
 echo "Generating repo-map.txt..."
 
 if command -v tree &> /dev/null; then
-  tree -I "node_modules|.git|build|dist|.dart_tool|ios/Pods|android/.gradle|.venv|venv|__pycache__|.idea|.vscode|.expo|.next|.nuxt|out|coverage|.nyc_output|target|.cargo|*.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.zip|*.gz|*.tar|*.mp4|*.mp3|*.woff|*.woff2|*.ttf|*.eot|*.map|*.apk|*.ipa|*.bundle|package-lock.json|yarn.lock|pnpm-lock.yaml|bun.lockb" "$TARGET_DIR" > "$MEMORY_DIR/repo-map.txt"
+  tree -I "node_modules|.git|build|dist|.dart_tool|ios/Pods|android/.gradle|.venv|venv|__pycache__|.idea|.vscode|.expo|.next|.nuxt|out|coverage|.nyc_output|target|.cargo|.ai-memory|*.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.zip|*.gz|*.tar|*.mp4|*.mp3|*.woff|*.woff2|*.ttf|*.eot|*.map|*.apk|*.ipa|*.bundle|package-lock.json|yarn.lock|pnpm-lock.yaml|bun.lockb" "$TARGET_DIR" > "$MEMORY_DIR/repo-map.txt"
 else
   # Fallback if tree is not installed
   find "$TARGET_DIR" \
