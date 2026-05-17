@@ -1,107 +1,36 @@
 #!/bin/bash
 # install.sh
-# Interactive installer for Token Save Optimizer
+# Installs the Token Save Optimizer CLI globally
 
-# Force input to come from terminal if piped via curl | bash
-if [ ! -t 0 ]; then
-  exec < /dev/tty
-fi
+echo "🚀 Installing Token Save Optimizer CLI..."
 
-# Colors for terminal output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+INSTALL_DIR="/usr/local/bin"
+CLI_URL="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/bin/tokensaveoptimizer"
 
-echo -e "${BLUE}======================================================${NC}"
-echo -e "${GREEN}🚀 Welcome to Token Save Optimizer Installation! 🧠🔋${NC}"
-echo -e "${BLUE}======================================================${NC}"
-echo -e "This will configure your local project to prevent AI token waste."
-echo ""
-
-# The core rules block
-RULES=$(cat << 'EOF'
-
-# ==========================================
-# CONTEXT OPTIMIZER & TOKEN SAVER RULES
-# ==========================================
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
-- **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
-- **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
-EOF
-)
-
-# Function to inject rules into a specific file
-inject_rules() {
-    local file=$1
-    local name=$2
-    if [ -f "$file" ]; then
-        if ! grep -q "CONTEXT OPTIMIZER & TOKEN SAVER RULES" "$file"; then
-            echo "$RULES" >> "$file"
-            echo -e "✅ Updated ${CYAN}$name${NC} ($file)"
-        else
-            echo -e "⚡ ${YELLOW}$name${NC} ($file) already has the rules applied."
-        fi
+# Fallback to local testing if running locally
+if [ -f "bin/tokensaveoptimizer" ]; then
+    echo "Installing from local source..."
+    if [ ! -w "$INSTALL_DIR" ]; then
+        sudo cp bin/tokensaveoptimizer "$INSTALL_DIR/tokensaveoptimizer"
+        sudo chmod +x "$INSTALL_DIR/tokensaveoptimizer"
     else
-        echo "$RULES" > "$file"
-        echo -e "✅ Created ${GREEN}$name${NC} config ($file)"
+        cp bin/tokensaveoptimizer "$INSTALL_DIR/tokensaveoptimizer"
+        chmod +x "$INSTALL_DIR/tokensaveoptimizer"
     fi
-}
-
-echo -e "Which AI tools do you want to install this for in this project?"
-echo "Enter the numbers separated by spaces (e.g., 1 3 4), or 7 for ALL:"
-echo "  1) Claude Code (.claudecode)"
-echo "  2) Cline (.clinerules)"
-echo "  3) Roo Code (.roomodes)"
-echo "  4) Kilo (.kilorules)"
-echo "  5) Gemini CLI / Antigravity (.geminirules)"
-echo "  6) Open Code (.opencode)"
-echo "  7) 🎯 Install for ALL of them"
-echo ""
-
-read -p "Your selection: " selections
-
-echo ""
-echo -e "${BLUE}Installing scripts...${NC}"
-mkdir -p .ai-memory/scripts
-
-if [ -f "scripts/init-smart-search.sh" ]; then
-    cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
 else
-    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+    echo "Downloading from GitHub..."
+    if [ ! -w "$INSTALL_DIR" ]; then
+        echo "Requires sudo privileges to install to $INSTALL_DIR"
+        sudo curl -sSL "$CLI_URL" -o "$INSTALL_DIR/tokensaveoptimizer"
+        sudo chmod +x "$INSTALL_DIR/tokensaveoptimizer"
+    else
+        curl -sSL "$CLI_URL" -o "$INSTALL_DIR/tokensaveoptimizer"
+        chmod +x "$INSTALL_DIR/tokensaveoptimizer"
+    fi
 fi
-chmod +x .ai-memory/scripts/init-smart-search.sh
 
-echo -e "${BLUE}Applying rules...${NC}"
-
-# Check selections
-if [[ " $selections " == *" 7 "* ]]; then
-    selections="1 2 3 4 5 6"
-fi
-
-for choice in $selections; do
-    case $choice in
-        1) inject_rules ".claudecode" "Claude Code" ;;
-        2) inject_rules ".clinerules" "Cline" ;;
-        3) inject_rules ".roomodes" "Roo Code" ;;
-        4) inject_rules ".kilorules" "Kilo" ;;
-        5) inject_rules ".geminirules" "Gemini CLI" ;;
-        6) inject_rules ".opencode" "Open Code" ;;
-        *) ;;
-    esac
-done
-
+echo "✅ Installed successfully!"
 echo ""
-echo -e "${GREEN}🎉 Installation Complete!${NC}"
-echo -e "${BLUE}======================================================${NC}"
-echo -e "${YELLOW}💡 HOW TO USE:${NC}"
-echo -e "1. You don't need to do anything! The AI will automatically read these rules."
-echo -e "2. The AI will now use ${CYAN}.ai-memory/scripts/init-smart-search.sh${NC} to explore your project."
-echo -e "3. If the AI gets stuck in a loop, simply prompt it:"
-echo -e "   ${GREEN}\"Please refresh your memory state.\"${NC}"
-echo -e ""
-echo -e "For more details or to star the repo, visit:"
-echo -e "${CYAN}https://github.com/Basharlouzon/Token-save---optimizer${NC}"
-echo -e "${BLUE}======================================================${NC}"
+echo "You can now run this command in ANY project:"
+echo -e "\033[0;36m  tokensaveoptimizer install\033[0m"
+echo ""
