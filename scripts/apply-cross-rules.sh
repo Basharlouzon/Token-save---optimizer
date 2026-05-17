@@ -6,13 +6,16 @@ TARGET_DIR="${1:-.}"
 
 RULES=$(cat << 'EOF'
 
-# ==========================================
-# TOKENSO CONTEXT OPTIMIZER RULES
-# ==========================================
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
-- **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
-- **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
+# ==============================================================
+# 🧠 TOKENSO — CONTEXT OPTIMIZER & ACTIVE MEMORY RULES
+# ==============================================================
+# These rules enforce maximum efficiency, preventing context window bloat 
+# and stopping AI agents from repeating themselves or looping.
+
+- **Zero-Waste Searching**: Do not read full files blindly. Check file size first. Use targeted searches (`grep_search`, `rg`) to locate file names, then read only specific line ranges.
+- **Smart Mapping**: If you need to understand the project structure, do not run `ls -R` or `find`. Instead, execute `tokenso map` to visualize the lightweight, colorized tree hierarchy from `.ai-memory/repo-map.txt`.
+- **Active Memory Protocol**: Before starting any task, read the current AI Memory using `tokenso state` (or checking `.ai-memory/state.md`). Upon reaching a milestone, fixing a bug, or taking complex steps, update the memory with `tokenso save "[Milestone Message]"` to compress findings.
+- **Prune & Progress**: After saving state, explicitly offload previous raw context from your thinking. Focus only on the active checklist. If you detect that you are repeating failed commands or stuck in a loop, STOP, update the state, and ask the user for clarification.
 EOF
 )
 

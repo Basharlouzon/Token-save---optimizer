@@ -17,12 +17,12 @@ As an AI agent, you must strictly follow these rules when this skill is active o
 - **Targeted viewing**: Once a file is identified, read *only the specific line ranges* you need. NEVER load a 2,000-line file into context just to read a single function. 
 
 ## 2. Smart Initialization
-- **Use the Repo Map**: If you need to understand the project structure, do not run `ls -R` or `find`. Instead, execute `bash /Users/basharlouzon/.gemini/antigravity/skills/context-optimizer/scripts/init-smart-search.sh`. 
+- **Use the Repo Map**: If you need to understand the project structure, do not run `ls -R` or `find`. Instead, execute `tokenso map` or run `bash scripts/init-smart-search.sh .`.
 - **Read the Map**: This script generates an ultra-compressed tree structure at `.ai-memory/repo-map.txt`. Read this tiny file instead of manually exploring the workspace.
 
 ## 3. The Memory Refresh Protocol (Prevent Duplication & Looping)
-- **Check State**: Before making any significant architectural decisions or writing new features, ALWAYS check if `.ai-memory/state.md` exists. If it does, read it. This is your core long-term memory.
-- **Write State**: Upon completing a milestone, fixing a major bug, or taking multiple steps that bloat your context, you MUST compress your findings. Update `.ai-memory/state.md` with:
+- **Check State**: Before making any significant architectural decisions or writing new features, ALWAYS check if `.ai-memory/state.md` exists. If it does, read it (or run `tokenso state`). This is your core long-term memory.
+- **Write State**: Upon completing a milestone, fixing a major bug, or taking multiple steps that bloat your context, you MUST compress your findings. Update `.ai-memory/state.md` (or use `tokenso save "[Custom Note]"`) with:
   - `[x]` Completed tasks
   - `[ ]` Next actions
   - `!` Key findings or architectural rules discovered.
@@ -30,7 +30,7 @@ As an AI agent, you must strictly follow these rules when this skill is active o
 
 ## 4. Cross-Agent Compatibility
 - If requested by the user, you can inject these memory-saving rules into other agents' configurations (like Cline, Roo, or Claude Code) by running:
-  `bash /Users/basharlouzon/.gemini/antigravity/skills/context-optimizer/scripts/apply-cross-rules.sh <project_directory>`
+  `bash scripts/apply-cross-rules.sh <project_directory>`
 
 ## Output Format
 When you update memory or prune context, output a brief summary to the user:
