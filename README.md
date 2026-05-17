@@ -15,9 +15,10 @@ curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer
 ```
 
 **What this does:**
-1. Creates a local `.ai-memory/scripts/` folder.
-2. Downloads the tiny `init-smart-search.sh` script.
-3. Automatically injects the token-saving rules directly into `.clinerules`, `.roomodes`, and `.claudecode` if they exist (or creates them if they don't).
+1. Launches an **interactive wizard** in your terminal.
+2. Asks you which AI tools you use (multi-select supported!).
+3. Creates a local `.ai-memory/scripts/` folder and downloads the `init-smart-search.sh` script.
+4. Automatically injects the token-saving rules directly into your selected tools' configuration files (e.g., `.clinerules`, `.roomodes`, `.claudecode`, `.geminirules`, etc.).
 
 ## 💡 How to Use
 

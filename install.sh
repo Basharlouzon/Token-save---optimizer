@@ -1,23 +1,26 @@
 #!/bin/bash
 # install.sh
-# Installs Context Optimizer rules and scripts into the current project.
+# Interactive installer for Token Save Optimizer
 
-echo "🚀 Installing Context Optimizer..."
-
-# Create local script directory to ensure the agent has access to it
-mkdir -p .ai-memory/scripts
-
-# Fetch the smart search script
-# It will copy the local one if it exists, or try to fetch it online
-if [ -f "scripts/init-smart-search.sh" ]; then
-    cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
-else
-    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+# Force input to come from terminal if piped via curl | bash
+if [ ! -t 0 ]; then
+  exec < /dev/tty
 fi
 
-chmod +x .ai-memory/scripts/init-smart-search.sh
+# Colors for terminal output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
 
-# The rules block
+echo -e "${BLUE}======================================================${NC}"
+echo -e "${GREEN}🚀 Welcome to Token Save Optimizer Installation! 🧠🔋${NC}"
+echo -e "${BLUE}======================================================${NC}"
+echo -e "This will configure your local project to prevent AI token waste."
+echo ""
+
+# The core rules block
 RULES=$(cat << 'EOF'
 
 # ==========================================
@@ -30,20 +33,75 @@ RULES=$(cat << 'EOF'
 EOF
 )
 
-# Inject into common agent dotfiles
-for file in .clinerules .roomodes .claudecode; do
-  if [ -f "$file" ]; then
-    if ! grep -q "CONTEXT OPTIMIZER & TOKEN SAVER RULES" "$file"; then
-      echo "$RULES" >> "$file"
-      echo "✅ Updated $file"
+# Function to inject rules into a specific file
+inject_rules() {
+    local file=$1
+    local name=$2
+    if [ -f "$file" ]; then
+        if ! grep -q "CONTEXT OPTIMIZER & TOKEN SAVER RULES" "$file"; then
+            echo "$RULES" >> "$file"
+            echo -e "✅ Updated ${CYAN}$name${NC} ($file)"
+        else
+            echo -e "⚡ ${YELLOW}$name${NC} ($file) already has the rules applied."
+        fi
     else
-      echo "⚡ $file already has the rules applied."
+        echo "$RULES" > "$file"
+        echo -e "✅ Created ${GREEN}$name${NC} config ($file)"
     fi
-  else
-    echo "$RULES" > "$file"
-    echo "✅ Created $file"
-  fi
+}
+
+echo -e "Which AI tools do you want to install this for in this project?"
+echo "Enter the numbers separated by spaces (e.g., 1 3 4), or 7 for ALL:"
+echo "  1) Claude Code (.claudecode)"
+echo "  2) Cline (.clinerules)"
+echo "  3) Roo Code (.roomodes)"
+echo "  4) Kilo (.kilorules)"
+echo "  5) Gemini CLI / Antigravity (.geminirules)"
+echo "  6) Open Code (.opencode)"
+echo "  7) 🎯 Install for ALL of them"
+echo ""
+
+read -p "Your selection: " selections
+
+echo ""
+echo -e "${BLUE}Installing scripts...${NC}"
+mkdir -p .ai-memory/scripts
+
+if [ -f "scripts/init-smart-search.sh" ]; then
+    cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
+else
+    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+fi
+chmod +x .ai-memory/scripts/init-smart-search.sh
+
+echo -e "${BLUE}Applying rules...${NC}"
+
+# Check selections
+if [[ " $selections " == *" 7 "* ]]; then
+    selections="1 2 3 4 5 6"
+fi
+
+for choice in $selections; do
+    case $choice in
+        1) inject_rules ".claudecode" "Claude Code" ;;
+        2) inject_rules ".clinerules" "Cline" ;;
+        3) inject_rules ".roomodes" "Roo Code" ;;
+        4) inject_rules ".kilorules" "Kilo" ;;
+        5) inject_rules ".geminirules" "Gemini CLI" ;;
+        6) inject_rules ".opencode" "Open Code" ;;
+        *) ;;
+    esac
 done
 
-echo "🎉 Context Optimizer installed successfully in this project!"
-echo "Agents will now use .ai-memory/scripts/init-smart-search.sh for exploration."
+echo ""
+echo -e "${GREEN}🎉 Installation Complete!${NC}"
+echo -e "${BLUE}======================================================${NC}"
+echo -e "${YELLOW}💡 HOW TO USE:${NC}"
+echo -e "1. You don't need to do anything! The AI will automatically read these rules."
+echo -e "2. The AI will now use ${CYAN}.ai-memory/scripts/init-smart-search.sh${NC} to explore your project."
+echo -e "3. If the AI gets stuck in a loop, simply prompt it:"
+echo -e "   ${GREEN}\"Please refresh your memory state.\"${NC}"
+echo -e ""
+echo -e "For more details or to star the repo, visit:"
+echo -e "${CYAN}https://github.com/Basharlouzon/Token-save---optimizer${NC}"
+echo -e "${BLUE}======================================================${NC}"
