@@ -38,6 +38,7 @@ An interactive wizard launches — pick any tools you use:
  6) Open Code            (.opencode)
  7) Aider                (.aider.conf.yml + CONVENTIONS.md)
  8) Continue.dev         (.continue/config.yaml)
+16) ⭐ Antigravity         (global skill + .geminirules)
 ── AI-Powered Editors ────────────────────────────
  9) Cursor               (.cursorrules + .cursor/rules/)
 10) Windsurf (Codeium)   (.windsurfrules)
@@ -126,6 +127,14 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 | Open Code | `.opencode` |
 | Aider | `CONVENTIONS.md` + `.aider.conf.yml` |
 | Continue.dev | `.continue/config.yaml` |
+
+### ⭐ Antigravity (Google DeepMind)
+| What | Where |
+|---|---|
+| **Global skill** | `~/.gemini/antigravity/skills/context-optimizer/` |
+| **Project rules** | `.geminirules` |
+
+> Selecting option `16` installs a persistent global skill into Antigravity's skill directory so the optimizer is active in **every** project automatically — not just the current one.
 
 ### AI-Powered Editors
 | Tool | Config File(s) |

@@ -45,7 +45,7 @@ detect_tools() {
     [ -f ".clinerules" ]                          && found+=("Cline")
     [ -f ".roomodes" ]                            && found+=("Roo Code")
     [ -f ".kilorules" ]                           && found+=("Kilo")
-    [ -f ".geminirules" ]                         && found+=("Gemini CLI")
+    [ -f ".geminirules" ]                         && found+=("Gemini CLI / Antigravity")
     [ -f ".opencode" ]                            && found+=("Open Code")
     [ -f ".cursorrules" ]                         && found+=("Cursor")
     [ -d ".cursor/rules" ]                        && found+=("Cursor (rules/)")
@@ -57,6 +57,7 @@ detect_tools() {
     [ -f ".voidrules" ]                           && found+=("Void Editor")
     [ -f ".zed/assistant-rules.md" ]              && found+=("Zed")
     [ -f ".pearai" ]                              && found+=("PearAI")
+    [ -d "$HOME/.gemini/antigravity/skills/context-optimizer" ] && found+=("Antigravity ✓ global")
     echo "${found[@]}"
 }
 
@@ -227,6 +228,7 @@ RULES_EOF
     echo -e "   6) Open Code            (.opencode)"
     echo -e "   7) Aider                (.aider.conf.yml + CONVENTIONS.md)"
     echo -e "   8) Continue.dev         (.continue/config.yaml)"
+    echo -e "  ${BGREEN} 16) Antigravity (Google DeepMind)  (global skill + .geminirules)${NC}"
     echo -e "  ${BOLD}── AI-Powered Editors ────────────────────────────${NC}"
     echo -e "   9) Cursor               (.cursorrules + .cursor/rules/)"
     echo -e "  10) Windsurf (Codeium)   (.windsurfrules)"
@@ -250,7 +252,7 @@ RULES_EOF
     echo -e "  ${GREEN}✓ init-smart-search.sh ready${NC}\n"
 
     echo -e "  ${BLUE}⚙  Injecting rules...${NC}"
-    [[ " $selections " == *" 0 "* ]] && selections="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15"
+    [[ " $selections " == *" 0 "* ]] && selections="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16"
 
     for choice in $selections; do
         case $choice in
@@ -266,7 +268,6 @@ RULES_EOF
             6)  inject_rules ".opencode"    "Open Code" ;;
             7)
                 inject_rules "CONVENTIONS.md" "Aider (CONVENTIONS.md)"
-                # Also add model config hint
                 if [ ! -f ".aider.conf.yml" ]; then
                     printf "# Aider config\nread-only:\n  - .ai-memory/repo-map.txt\n" > .aider.conf.yml
                     echo -e "  ✅ Created Aider config → .aider.conf.yml"
@@ -275,6 +276,22 @@ RULES_EOF
             8)
                 mkdir -p .continue
                 inject_rules ".continue/config.yaml" "Continue.dev"
+                ;;
+            16)
+                # Antigravity: inject project-level + install global skill
+                inject_rules ".geminirules" "Antigravity (project)"
+                AG_SKILL_DIR="$HOME/.gemini/antigravity/skills/context-optimizer"
+                if [ ! -d "$AG_SKILL_DIR" ]; then
+                    mkdir -p "$AG_SKILL_DIR/scripts"
+                    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/SKILL.md" \
+                         -o "$AG_SKILL_DIR/SKILL.md"
+                    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" \
+                         -o "$AG_SKILL_DIR/scripts/init-smart-search.sh"
+                    chmod +x "$AG_SKILL_DIR/scripts/init-smart-search.sh"
+                    echo -e "  ✅ Installed Antigravity global skill → $AG_SKILL_DIR"
+                else
+                    echo -e "  ⚡ Antigravity global skill already installed."
+                fi
                 ;;
             # ── Editors ──
             9)
