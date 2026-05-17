@@ -15,6 +15,7 @@ RULES=$(cat << EOF
 # ==========================================
 # TOKENSO CONTEXT OPTIMIZER RULES ($MARKER_VERSION)
 # ==========================================
+- **Smart Mode**: At the start of every session, run \`tokenso smart\` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use \`tokenso smart --json\` for machine-readable output.
 - **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
 - **Smart Init**: If you need to explore the project, do not run \`ls -R\`. Instead, run \`tokenso map\` (or \`bash .ai-memory/scripts/init-smart-search.sh .\`) and read \`.ai-memory/repo-map.txt\`.
 - **Memory Protocol**: Before acting, always read \`.ai-memory/state.md\`. Upon reaching a milestone or repeating actions, compress your current understanding into \`.ai-memory/state.md\` and explicitly command yourself to forget the prior raw context to save tokens.

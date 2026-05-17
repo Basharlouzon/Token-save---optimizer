@@ -398,6 +398,7 @@ _show_commands() {
     echo -e "  ${CYAN}doctor${NC}    Run environment diagnostics"
     echo -e "  ${CYAN}status${NC}    Quick one-line project health check"
     echo -e "  ${CYAN}watch${NC}     Background auto-save on file changes (start/stop/status)"
+    echo -e "  ${CYAN}smart${NC}     AI agent autopilot: auto-init, refresh, save, diagnose, report"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -415,6 +416,7 @@ run_install() {
 # ==========================================
 # TOKENSO CONTEXT OPTIMIZER RULES
 # ==========================================
+- **Smart Mode**: At the start of every session, run `tokenso smart` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use `tokenso smart --json` for machine-readable output.
 - **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
 - **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
 - **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
@@ -2896,6 +2898,309 @@ run_watch() {
     esac
 }
 
+# ─── SMART (AI Agent Autopilot) ────────────────────────────────────────────
+run_smart() {
+    local format=${1:-"text"}
+    local actions_taken=()
+    local actions_suggested=()
+    local issues=()
+
+    _smart_action() { actions_taken+=("$1"); }
+    _smart_suggest() { actions_suggested+=("$1"); }
+    _smart_issue() { issues+=("$1"); }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 1: AUTO-INITIALIZE
+    # ═══════════════════════════════════════════════════════════════════════
+    if [ ! -d ".ai-memory" ]; then
+        mkdir -p .ai-memory/scripts
+
+        # Copy or download init script
+        if [ -f "scripts/init-smart-search.sh" ]; then
+            cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
+        else
+            curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" \
+                -o .ai-memory/scripts/init-smart-search.sh
+        fi
+        chmod +x .ai-memory/scripts/init-smart-search.sh
+
+        # Generate initial repo map
+        bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+
+        # Init stats
+        cat > ".ai-memory/optimizer-stats.json" << EOF
+{
+  "schema": 1,
+  "version": "$VERSION",
+  "installed": "$(date +"%Y-%m-%d")",
+  "sessions": 0,
+  "cumulative_saved": 0,
+  "last_run": "$(date +"%Y-%m-%d %H:%M")",
+  "history": []
+}
+EOF
+
+        # Init state.md
+        cat > ".ai-memory/state.md" << 'EOF'
+# AI Memory State
+
+## Completed Tasks
+- [x] Auto-initialized by tokenso smart
+
+## Next Actions
+- [ ] Explore codebase modules
+
+## Blocked
+- (none)
+
+## Decisions
+- (none)
+
+## Key Context & Architecture
+- (auto-initialized)
+EOF
+
+        # Inject rules into detected tool configs
+        local injected=()
+        for cfg in .claudecode CLAUDE.md .kilorules .geminirules .cursorrules .clinerules .roomodes; do
+            if [ -f "$cfg" ] || [ "$cfg" = ".claudecode" ] || [ "$cfg" = "CLAUDE.md" ] || [ "$cfg" = ".kilorules" ]; then
+                if ! grep -q "TOKENSO CONTEXT OPTIMIZER RULES" "$cfg" 2>/dev/null; then
+                    cat >> "$cfg" << 'RULES'
+
+# ==========================================
+# TOKENSO CONTEXT OPTIMIZER RULES
+# ==========================================
+- **Smart Mode**: At the start of every session, run `tokenso smart` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use `tokenso smart --json` for machine-readable output.
+- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
+- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `tokenso map` (or `bash .ai-memory/scripts/init-smart-search.sh .`) and read `.ai-memory/repo-map.txt`.
+- **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
+- **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
+RULES
+                    injected+=("$cfg")
+                fi
+            fi
+        done
+
+        _smart_action "Initialized .ai-memory/ (repo map, stats, state.md)"
+        [ ${#injected[@]} -gt 0 ] && _smart_action "Injected rules into: ${injected[*]}"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 2: REFRESH STALE MAP
+    # ═══════════════════════════════════════════════════════════════════════
+    local map_file=".ai-memory/repo-map.txt"
+    local map_stale=false
+
+    if [ ! -f "$map_file" ]; then
+        map_stale=true
+    else
+        local map_mtime=0
+        map_mtime=$(stat -f %m "$map_file" 2>/dev/null || stat -c %Y "$map_file" 2>/dev/null || echo 0)
+        if [ -f ".git/index" ]; then
+            local git_mtime=0
+            git_mtime=$(stat -f %m .git/index 2>/dev/null || stat -c %Y .git/index 2>/dev/null || echo 0)
+            [ "$git_mtime" -gt "$map_mtime" ] && map_stale=true
+        fi
+    fi
+
+    if $map_stale; then
+        if [ -f ".ai-memory/scripts/init-smart-search.sh" ]; then
+            bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+            _smart_action "Refreshed stale repo map"
+        else
+            _smart_issue "init-smart-search.sh missing — run 'tokenso install'"
+        fi
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 3: SAVE SESSION STATS
+    # ═══════════════════════════════════════════════════════════════════════
+    load_or_init_stats
+    local file_list
+    file_list=$(list_source_files)
+    local raw_words=0
+    if [ -n "$file_list" ]; then
+        raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    fi
+    [ -z "$raw_words" ] && raw_words=0
+    local map_words=0
+    [ -f "$map_file" ] && map_words=$(wc -w < "$map_file")
+    local raw_tokens=$(( raw_words * 13 / 10 ))
+    local map_tokens=$(( map_words * 13 / 10 ))
+    local saved_tokens=$(( raw_tokens - map_tokens ))
+    [ $saved_tokens -lt 0 ] && saved_tokens=0
+    local pct=0
+    [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
+
+    local next_sessions=$(( SESSIONS + 1 ))
+    local next_saved=$(( CUMULATIVE_SAVED + saved_tokens ))
+    save_stats "$next_sessions" "$next_saved" "$saved_tokens"
+    _smart_action "Saved session stats ($next_sessions sessions, $(fmt_num $next_saved) tokens cumulative)"
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 4: MANAGE WATCHER
+    # ═══════════════════════════════════════════════════════════════════════
+    local watcher_status="stopped"
+    if [ -f "$WATCH_PID_FILE" ]; then
+        local wpid
+        wpid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+        if kill -0 "$wpid" 2>/dev/null; then
+            watcher_status="running (PID $wpid)"
+        else
+            rm -f "$WATCH_PID_FILE"
+            watcher_status="dead (cleaned up stale PID)"
+        fi
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 5: DIAGNOSE ISSUES
+    # ═══════════════════════════════════════════════════════════════════════
+    # Check dependencies
+    command -v jq &>/dev/null || _smart_issue "jq not installed (JSON parsing uses grep/awk fallback)"
+    command -v rg &>/dev/null || _smart_issue "ripgrep not installed (brew install ripgrep for faster search)"
+    command -v bc &>/dev/null || _smart_issue "bc not installed (cost math uses awk fallback)"
+
+    # Check stats validity
+    if [ -f ".ai-memory/optimizer-stats.json" ]; then
+        if command -v jq &>/dev/null; then
+            if ! jq . ".ai-memory/optimizer-stats.json" &>/dev/null; then
+                _smart_issue "optimizer-stats.json is corrupt JSON — run 'tokenso reset'"
+            fi
+        fi
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 6: READ STATE
+    # ═══════════════════════════════════════════════════════════════════════
+    local state_content=""
+    if [ -f ".ai-memory/state.md" ]; then
+        state_content=$(cat ".ai-memory/state.md")
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 7: GENERATE SUGGESTIONS
+    # ═══════════════════════════════════════════════════════════════════════
+    # Suggest starting watcher if not running
+    [ "$watcher_status" = "stopped" ] && _smart_suggest "Run 'tokenso watch start' for continuous auto-save"
+
+    # Suggest injecting rules if no tool configs found
+    local tools
+    tools=$(detect_tools)
+    [ -z "$tools" ] && _smart_suggest "No AI tool configs detected — run 'tokenso install' to inject rules"
+
+    # Suggest reading state.md before acting
+    [ -n "$state_content" ] && _smart_suggest "Read .ai-memory/state.md before starting work to recall prior context"
+
+    # Suggest map refresh if compression is low
+    [ "$pct" -lt 50 ] && [ "$raw_tokens" -gt 100 ] && _smart_suggest "Compression ratio is low ($pct%) — consider adding exclusions for large generated directories"
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # OUTPUT
+    # ═══════════════════════════════════════════════════════════════════════
+    local project=$(basename "$(pwd)")
+    local file_count=0
+    [ -n "$file_list" ] && file_count=$(echo "$file_list" | wc -l | tr -d ' ')
+    local map_lines=0
+    [ -f "$map_file" ] && map_lines=$(wc -l < "$map_file" | tr -d ' ')
+    local cost_saved=$(cost_usd $saved_tokens)
+    local cost_cum=$(cost_usd $next_saved)
+    local active_tools="$tools"
+    [ -z "$active_tools" ] && active_tools="none"
+
+    if [ "$format" = "--json" ]; then
+        # Escape state content for JSON
+        local state_json="\"\""
+        if [ -n "$state_content" ]; then
+            state_json=$(echo "$state_content" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+            state_json="\"$state_json\""
+        fi
+
+        local actions_json="["
+        for ((i=0; i<${#actions_taken[@]}; i++)); do
+            local escaped=$(echo "${actions_taken[$i]}" | sed 's/"/\\"/g')
+            actions_json="${actions_json}\"${escaped}\""
+            [ $i -lt $(( ${#actions_taken[@]} - 1 )) ] && actions_json="${actions_json}, "
+        done
+        actions_json="${actions_json}]"
+
+        local suggestions_json="["
+        for ((i=0; i<${#actions_suggested[@]}; i++)); do
+            local escaped=$(echo "${actions_suggested[$i]}" | sed 's/"/\\"/g')
+            suggestions_json="${suggestions_json}\"${escaped}\""
+            [ $i -lt $(( ${#actions_suggested[@]} - 1 )) ] && suggestions_json="${suggestions_json}, "
+        done
+        suggestions_json="${suggestions_json}]"
+
+        local issues_json="["
+        for ((i=0; i<${#issues[@]}; i++)); do
+            local escaped=$(echo "${issues[$i]}" | sed 's/"/\\"/g')
+            issues_json="${issues_json}\"${escaped}\""
+            [ $i -lt $(( ${#issues[@]} - 1 )) ] && issues_json="${issues_json}, "
+        done
+        issues_json="${issues_json}]"
+
+        cat << EOF
+{
+  "version": "$VERSION",
+  "project": "$project",
+  "session": $next_sessions,
+  "files": $file_count,
+  "raw_tokens": $raw_tokens,
+  "map_tokens": $map_tokens,
+  "saved_tokens": $saved_tokens,
+  "saved_pct": $pct,
+  "cumulative_tokens": $next_saved,
+  "cumulative_usd": $cost_cum,
+  "map_lines": $map_lines,
+  "watcher": "$watcher_status",
+  "active_tools": "$active_tools",
+  "actions_taken": $actions_json,
+  "suggestions": $suggestions_json,
+  "issues": $issues_json,
+  "state": $state_json
+}
+EOF
+    else
+        # Clean text output — no ANSI codes, no animations.
+        # This is what AI agents parse.
+        echo "═══ TOKENSO SMART REPORT ═══"
+        echo "project: $project"
+        echo "version: $VERSION"
+        echo "session: $next_sessions"
+        echo "files: $file_count"
+        echo "raw_tokens: $raw_tokens"
+        echo "map_tokens: $map_tokens"
+        echo "saved_tokens: $saved_tokens"
+        echo "saved_pct: $pct"
+        echo "cumulative_tokens: $next_saved"
+        echo "cumulative_usd: $cost_cum"
+        echo "map_lines: $map_lines"
+        echo "watcher: $watcher_status"
+        echo "active_tools: $active_tools"
+        echo ""
+        echo "── ACTIONS TAKEN ──"
+        for a in "${actions_taken[@]}"; do echo "  ✓ $a"; done
+        [ ${#actions_taken[@]} -eq 0 ] && echo "  (none — everything was up to date)"
+        echo ""
+        echo "── SUGGESTIONS ──"
+        for s in "${actions_suggested[@]}"; do echo "  → $s"; done
+        [ ${#actions_suggested[@]} -eq 0 ] && echo "  (none — everything optimal)"
+        echo ""
+        echo "── ISSUES ──"
+        for i in "${issues[@]}"; do echo "  ⚠ $i"; done
+        [ ${#issues[@]} -eq 0 ] && echo "  (none)"
+        echo ""
+
+        if [ -n "$state_content" ]; then
+            echo "── STATE.MD ──"
+            echo "$state_content"
+            echo ""
+        fi
+
+        echo "═══ END REPORT ═══"
+    fi
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
@@ -2937,6 +3242,10 @@ case "$1" in
     watch)
         shift
         run_watch "$@"
+        ;;
+    smart)
+        shift
+        run_smart "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;
