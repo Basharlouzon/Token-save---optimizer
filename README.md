@@ -1,65 +1,101 @@
 # Context Optimizer & Token Saver 🧠🔋
 
-AI coding agents (like Claude Code, Cline, Roo, and Antigravity) are incredibly powerful, but they often suffer from a critical flaw: **Context Bloat & Token Waste.**
+AI coding agents (like Claude Code, Cline, Roo, and Gemini CLI) are incredibly powerful, but they often suffer from a critical flaw: **Context Bloat & Token Waste.**
 
 When agents explore a large codebase, they tend to read entire files just to find a single line, dump huge search results into their memory, and loop over old mistakes. This bloats the context window, wastes tokens, and makes the AI slower and more expensive.
 
-**Context Optimizer** is a set of rules and scripts designed to put your AI agent on a strict "Search Diet" and enforce a "Memory Refresh Protocol".
+**Token Save Optimizer** is a CLI tool that enforces a "Search Diet" and a "Memory Refresh Protocol" across all your AI agents.
 
-## 🚀 Quick Install (1-Liner)
+---
 
-The easiest way to install Context Optimizer into your current project is via your terminal. Run the following command at the root of your project:
+## ⚡ One-Time Global Install
+
+Run this **once** on your machine. It installs the `tokensaveoptimizer` command globally:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/install.sh | bash
 ```
 
-**What this does:**
-1. Launches an **interactive wizard** in your terminal.
-2. Asks you which AI tools you use (multi-select supported!).
-3. Creates a local `.ai-memory/scripts/` folder and downloads the `init-smart-search.sh` script.
-4. Automatically injects the token-saving rules directly into your selected tools' configuration files (e.g., `.clinerules`, `.roomodes`, `.claudecode`, `.geminirules`, etc.).
+---
 
-## 💡 How to Use
+## 🚀 Usage
 
-Once installed, **you don't have to do anything**. The AI agent will automatically follow the new rules.
+Now in **any project**, just run:
 
-However, if you notice your agent getting stuck in a loop or starting to waste tokens on a long task, you can explicitly prompt it:
+```bash
+tokensaveoptimizer install
+```
+
+This launches an interactive wizard that asks which AI tools you use, then automatically configures all of them!
+
+```
+======================================================
+🚀 Welcome to Token Save Optimizer! 🧠🔋
+======================================================
+Which AI tools do you want to install this for?
+
+  1) Claude Code (.claudecode)
+  2) Cline (.clinerules)
+  3) Roo Code (.roomodes)
+  4) Kilo (.kilorules)
+  5) Gemini CLI / Antigravity (.geminirules)
+  6) Open Code (.opencode)
+  7) 🎯 Install for ALL of them
+
+Your selection: 1 3
+```
+
+You can select **multiple tools at once** or press `7` to install for all of them.
+
+---
+
+## 📊 Token Savings Statistics
+
+Want to see exactly how many tokens the optimizer is saving you on the current project?
+
+```bash
+tokensaveoptimizer stats
+```
+
+Example output:
+```
+📊 Token Save Optimizer Statistics
+======================================================
+Raw Project Tokens (if AI read everything):  148,200
+Optimized Repo Map Tokens:                     1,240
+------------------------------------------------------
+🔥 Total Tokens Saved per AI Exploration:   146,960 🔥
+------------------------------------------------------
+```
+
+---
+
+## 💡 How It Works
+
+| Without Optimizer | With Optimizer |
+|---|---|
+| AI runs `ls -R` & reads whole files | AI reads a tiny compressed `.ai-memory/repo-map.txt` |
+| AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
+| Token usage explodes | Context stays clean and focused |
+
+Once installed, **you don't need to do anything**. The AI automatically reads the rules. But if you notice it looping, simply tell it:
 > *"Please refresh your memory state."*
 
-The agent will then pause, write a summary of its progress into `.ai-memory/state.md`, clear its bloated thought history, and resume working with a fresh, clean context!
-
-### Manual Install
-If you prefer not to run scripts, you can manually copy and paste the block below into your AI's custom instructions file (e.g., `.clinerules`):
-
-```markdown
-# ==========================================
-# CONTEXT OPTIMIZER & TOKEN SAVER RULES
-# ==========================================
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
-- **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
-- **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
-```
-
-## 🛠 Advanced Features
-
-### 1. Smart Initialization Script
-Included in this repo is `scripts/init-smart-search.sh`. 
-When an AI agent runs this script, it generates a highly compressed map of your repository (excluding bulky directories like `node_modules` or `.git`) at `.ai-memory/repo-map.txt`. 
-
-Instead of burning tokens on heavy `ls` or `find` commands, the agent can instantly read the tiny `repo-map.txt` to understand your project structure.
-
-### 2. Auto-Injector Script
-If you are starting a new project, you can have your AI agent run the `scripts/apply-cross-rules.sh` script. This will automatically inject the token-saving rules into your `.clinerules`, `.roomodes`, and `.claudecode` dotfiles.
+---
 
 ## 🤝 Compatibility
-This protocol is framework-agnostic and works with:
-- Claude Code
-- Cline
-- Roo Code
-- Kilo
-- Antigravity
+
+| Tool | Config File |
+|---|---|
+| Claude Code | `.claudecode` |
+| Cline | `.clinerules` |
+| Roo Code | `.roomodes` |
+| Kilo | `.kilorules` |
+| Gemini CLI | `.geminirules` |
+| Open Code | `.opencode` |
+
+---
 
 ## 📄 License
-This project is open-source under the MIT License. Feel free to use, modify, and distribute it!
+
+MIT License — free to use, modify, and distribute.
