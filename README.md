@@ -13,7 +13,7 @@ When agents explore a large codebase, they tend to read entire files just to fin
 Run this **once** on your machine. It installs the `tokensaveoptimizer` command globally:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
 ```
 
 ---

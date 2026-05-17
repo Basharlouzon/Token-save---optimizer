@@ -5,7 +5,7 @@
 echo "🚀 Installing Token Save Optimizer CLI..."
 
 INSTALL_DIR="/usr/local/bin"
-CLI_URL="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/bin/tokensaveoptimizer"
+CLI_URL="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokensaveoptimizer"
 
 # Fallback to local testing if running locally
 if [ -f "bin/tokensaveoptimizer" ]; then

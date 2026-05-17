@@ -84,7 +84,7 @@ EOF
     echo -e "${BLUE}Installing scripts...${NC}"
     mkdir -p .ai-memory/scripts
 
-    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
     chmod +x .ai-memory/scripts/init-smart-search.sh
 
     echo -e "${BLUE}Applying rules...${NC}"
