@@ -40,12 +40,23 @@ cost_usd() {
 
 detect_tools() {
     local found=()
-    [ -f ".claudecode" ]  && found+=("Claude Code")
-    [ -f ".clinerules" ]  && found+=("Cline")
-    [ -f ".roomodes" ]    && found+=("Roo Code")
-    [ -f ".kilorules" ]   && found+=("Kilo")
-    [ -f ".geminirules" ] && found+=("Gemini CLI")
-    [ -f ".opencode" ]    && found+=("Open Code")
+    [ -f ".claudecode" ]                          && found+=("Claude Code")
+    [ -f "CLAUDE.md" ]                            && found+=("Claude Code (CLAUDE.md)")
+    [ -f ".clinerules" ]                          && found+=("Cline")
+    [ -f ".roomodes" ]                            && found+=("Roo Code")
+    [ -f ".kilorules" ]                           && found+=("Kilo")
+    [ -f ".geminirules" ]                         && found+=("Gemini CLI")
+    [ -f ".opencode" ]                            && found+=("Open Code")
+    [ -f ".cursorrules" ]                         && found+=("Cursor")
+    [ -d ".cursor/rules" ]                        && found+=("Cursor (rules/)")
+    [ -f ".windsurfrules" ]                       && found+=("Windsurf")
+    [ -f ".github/copilot-instructions.md" ]      && found+=("GitHub Copilot")
+    [ -f ".aider.conf.yml" ] || [ -f "CONVENTIONS.md" ] && found+=("Aider")
+    [ -f ".continue/config.yaml" ] || [ -f ".continue/config.json" ] && found+=("Continue.dev")
+    [ -f ".amazonq/rules/token-optimizer.md" ]    && found+=("Amazon Q")
+    [ -f ".voidrules" ]                           && found+=("Void Editor")
+    [ -f ".zed/assistant-rules.md" ]              && found+=("Zed")
+    [ -f ".pearai" ]                              && found+=("PearAI")
     echo "${found[@]}"
 }
 
@@ -206,14 +217,26 @@ RULES_EOF
         fi
     }
 
-    echo -e "Select AI tools to configure ${DIM}(space-separated numbers or 7 for ALL)${NC}:\n"
-    echo -e "  1) Claude Code    (.claudecode)"
-    echo -e "  2) Cline          (.clinerules)"
-    echo -e "  3) Roo Code       (.roomodes)"
-    echo -e "  4) Kilo           (.kilorules)"
-    echo -e "  5) Gemini CLI     (.geminirules)"
-    echo -e "  6) Open Code      (.opencode)"
-    echo -e "  ${YELLOW}7) 🎯 ALL of them${NC}\n"
+    echo -e "Select AI tools to configure ${DIM}(space-separated, e.g. 1 3 5, or 0 for ALL)${NC}:\n"
+    echo -e "  ${BOLD}── AI Coding Agents ──────────────────────────────${NC}"
+    echo -e "   1) Claude Code          (.claudecode + CLAUDE.md)"
+    echo -e "   2) Cline                (.clinerules)"
+    echo -e "   3) Roo Code             (.roomodes)"
+    echo -e "   4) Kilo                 (.kilorules)"
+    echo -e "   5) Gemini CLI           (.geminirules)"
+    echo -e "   6) Open Code            (.opencode)"
+    echo -e "   7) Aider                (.aider.conf.yml + CONVENTIONS.md)"
+    echo -e "   8) Continue.dev         (.continue/config.yaml)"
+    echo -e "  ${BOLD}── AI-Powered Editors ────────────────────────────${NC}"
+    echo -e "   9) Cursor               (.cursorrules + .cursor/rules/)"
+    echo -e "  10) Windsurf (Codeium)   (.windsurfrules)"
+    echo -e "  11) Void Editor          (.voidrules)"
+    echo -e "  12) Zed AI              (.zed/assistant-rules.md)"
+    echo -e "  13) PearAI              (.pearai)"
+    echo -e "  ${BOLD}── Enterprise & Cloud ────────────────────────────${NC}"
+    echo -e "  14) GitHub Copilot       (.github/copilot-instructions.md)"
+    echo -e "  15) Amazon Q Developer   (.amazonq/rules/)"
+    echo -e "  ${YELLOW}   0) 🎯 ALL of them${NC}\n"
 
     [ -t 0 ] || exec < /dev/tty
     read -p "  Your selection: " selections
@@ -227,16 +250,54 @@ RULES_EOF
     echo -e "  ${GREEN}✓ init-smart-search.sh ready${NC}\n"
 
     echo -e "  ${BLUE}⚙  Injecting rules...${NC}"
-    [[ " $selections " == *" 7 "* ]] && selections="1 2 3 4 5 6"
+    [[ " $selections " == *" 0 "* ]] && selections="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15"
 
     for choice in $selections; do
         case $choice in
-            1) inject_rules ".claudecode"  "Claude Code" ;;
-            2) inject_rules ".clinerules"  "Cline" ;;
-            3) inject_rules ".roomodes"    "Roo Code" ;;
-            4) inject_rules ".kilorules"   "Kilo" ;;
-            5) inject_rules ".geminirules" "Gemini CLI" ;;
-            6) inject_rules ".opencode"    "Open Code" ;;
+            # ── AI Agents ──
+            1)
+                inject_rules ".claudecode" "Claude Code"
+                inject_rules "CLAUDE.md"   "Claude Code (CLAUDE.md)"
+                ;;
+            2)  inject_rules ".clinerules"  "Cline" ;;
+            3)  inject_rules ".roomodes"    "Roo Code" ;;
+            4)  inject_rules ".kilorules"   "Kilo" ;;
+            5)  inject_rules ".geminirules" "Gemini CLI" ;;
+            6)  inject_rules ".opencode"    "Open Code" ;;
+            7)
+                inject_rules "CONVENTIONS.md" "Aider (CONVENTIONS.md)"
+                # Also add model config hint
+                if [ ! -f ".aider.conf.yml" ]; then
+                    printf "# Aider config\nread-only:\n  - .ai-memory/repo-map.txt\n" > .aider.conf.yml
+                    echo -e "  ✅ Created Aider config → .aider.conf.yml"
+                fi
+                ;;
+            8)
+                mkdir -p .continue
+                inject_rules ".continue/config.yaml" "Continue.dev"
+                ;;
+            # ── Editors ──
+            9)
+                inject_rules ".cursorrules" "Cursor"
+                mkdir -p .cursor/rules
+                inject_rules ".cursor/rules/token-optimizer.mdc" "Cursor (rules/)"
+                ;;
+            10) inject_rules ".windsurfrules" "Windsurf" ;;
+            11) inject_rules ".voidrules"     "Void Editor" ;;
+            12)
+                mkdir -p .zed
+                inject_rules ".zed/assistant-rules.md" "Zed AI"
+                ;;
+            13) inject_rules ".pearai" "PearAI" ;;
+            # ── Enterprise ──
+            14)
+                mkdir -p .github
+                inject_rules ".github/copilot-instructions.md" "GitHub Copilot"
+                ;;
+            15)
+                mkdir -p .amazonq/rules
+                inject_rules ".amazonq/rules/token-optimizer.md" "Amazon Q Developer"
+                ;;
         esac
     done
 
