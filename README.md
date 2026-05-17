@@ -11,14 +11,22 @@ When agents explore a large codebase, they tend to read entire files just to fin
 The easiest way to install Context Optimizer into your current project is via your terminal. Run the following command at the root of your project:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR-USERNAME/YOUR-REPO-NAME/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/install.sh | bash
 ```
-*(Make sure to replace `YOUR-USERNAME/YOUR-REPO-NAME` with the actual GitHub path once published!)*
 
 **What this does:**
 1. Creates a local `.ai-memory/scripts/` folder.
 2. Downloads the tiny `init-smart-search.sh` script.
 3. Automatically injects the token-saving rules directly into `.clinerules`, `.roomodes`, and `.claudecode` if they exist (or creates them if they don't).
+
+## 💡 How to Use
+
+Once installed, **you don't have to do anything**. The AI agent will automatically follow the new rules.
+
+However, if you notice your agent getting stuck in a loop or starting to waste tokens on a long task, you can explicitly prompt it:
+> *"Please refresh your memory state."*
+
+The agent will then pause, write a summary of its progress into `.ai-memory/state.md`, clear its bloated thought history, and resume working with a fresh, clean context!
 
 ### Manual Install
 If you prefer not to run scripts, you can manually copy and paste the block below into your AI's custom instructions file (e.g., `.clinerules`):

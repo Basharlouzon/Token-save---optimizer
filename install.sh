@@ -7,12 +7,12 @@ echo "🚀 Installing Context Optimizer..."
 # Create local script directory to ensure the agent has access to it
 mkdir -p .ai-memory/scripts
 
-# Fetch the smart search script (Replace YOUR-USERNAME/YOUR-REPO-NAME with your actual GitHub info once published)
-# For now, it will copy the local one if it exists, or try to fetch it online
+# Fetch the smart search script
+# It will copy the local one if it exists, or try to fetch it online
 if [ -f "scripts/init-smart-search.sh" ]; then
     cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
 else
-    curl -sSL "https://raw.githubusercontent.com/YOUR-USERNAME/YOUR-REPO-NAME/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
 fi
 
 chmod +x .ai-memory/scripts/init-smart-search.sh
