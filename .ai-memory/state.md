@@ -1,4 +1,4 @@
-# AI Memory State
+x# AI Memory State
 
 ## Completed Tasks
 - [x] Initialized Tokenso smart search memory
@@ -10,3 +10,4 @@
 - (Add crucial project facts here to avoid re-reading files)
 
 ! test
+! tes

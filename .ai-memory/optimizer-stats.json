@@ -1,8 +1,9 @@
 {
-  "version": "2.1.0",
+  "schema": 1,
+  "version": "2.2.0",
   "installed": "2026-05-17",
-  "sessions": 3,
-  "cumulative_saved": 56853,
-  "last_run": "2026-05-17 16:07",
-  "history": [18951, 18951, 18951]
+  "sessions": 7,
+  "cumulative_saved": 152393,
+  "last_run": "2026-05-17 17:14",
+  "history": [18951, 18951, 18951, 23885, 23885, 23885, 23885]
 }
