@@ -11,17 +11,54 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-show_help() {
+show_dashboard() {
     echo -e "${BLUE}======================================================${NC}"
-    echo -e "${GREEN}🧠 Token Save Optimizer (v$VERSION)${NC}"
+    echo -e "${GREEN}🧠 Token Save Optimizer  v$VERSION${NC}"
     echo -e "${BLUE}======================================================${NC}"
-    echo -e "Usage: tokensaveoptimizer [command]"
-    echo ""
+
+    # --- Live Stats Block ---
+    if [ -d ".ai-memory" ]; then
+        RAW_WORDS=0
+        if command -v rg &> /dev/null; then
+            RAW_WORDS=$(rg --files 2>/dev/null | grep -v '\.ai-memory' | xargs wc -w 2>/dev/null | tail -n 1 | awk '{print $1}')
+        else
+            RAW_WORDS=$(find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' -not -path '*/build/*' -not -path '*/dist/*' 2>/dev/null | xargs wc -w 2>/dev/null | tail -n 1 | awk '{print $1}')
+        fi
+        if [ -z "$RAW_WORDS" ]; then RAW_WORDS=0; fi
+
+        MAP_WORDS=0
+        if [ -f ".ai-memory/repo-map.txt" ]; then
+            MAP_WORDS=$(wc -w < .ai-memory/repo-map.txt)
+        fi
+
+        RAW_TOKENS=$(( RAW_WORDS * 13 / 10 ))
+        MAP_TOKENS=$(( MAP_WORDS * 13 / 10 ))
+        SAVED_TOKENS=$(( RAW_TOKENS - MAP_TOKENS ))
+        if [ $SAVED_TOKENS -lt 0 ]; then SAVED_TOKENS=0; fi
+
+        # Savings percentage
+        PCT=0
+        if [ $RAW_TOKENS -gt 0 ]; then
+            PCT=$(( SAVED_TOKENS * 100 / RAW_TOKENS ))
+        fi
+
+        echo -e "📁 Project:  ${CYAN}$(basename $(pwd))${NC}"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
+        echo -e "  Full scan (est. tokens):   ${RED}$(printf "%'d" $RAW_TOKENS)${NC}"
+        echo -e "  Optimized map tokens:      ${GREEN}$(printf "%'d" $MAP_TOKENS)${NC}"
+        echo -e "  ${YELLOW}🔥 Tokens saved:           $(printf "%'d" $SAVED_TOKENS)  (~${PCT}% reduction)${NC}"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
+    else
+        echo -e "  ${YELLOW}⚠️  Not initialized in this project.${NC}"
+        echo -e "  Run: ${CYAN}tokensaveoptimizer install${NC}  to get started."
+        echo -e "${BLUE}------------------------------------------------------${NC}"
+    fi
+
     echo -e "Commands:"
-    echo -e "  ${CYAN}install${NC}   Launch the interactive installation wizard for the current project"
-    echo -e "  ${CYAN}stats${NC}     View statistics on how many tokens have been saved in this project"
-    echo -e "  ${CYAN}help${NC}      Show this help menu"
-    echo ""
+    echo -e "  ${CYAN}install${NC}   Launch the interactive setup wizard"
+    echo -e "  ${CYAN}stats${NC}     Show token savings statistics"
+    echo -e "  ${CYAN}help${NC}      Show this menu"
+    echo -e "${BLUE}======================================================${NC}"
 }
 
 run_install() {
@@ -173,8 +210,11 @@ case "$1" in
     stats)
         run_stats
         ;;
-    help|--help|-h|"")
-        show_help
+    help|--help|-h)
+        show_dashboard
+        ;;
+    "")
+        show_dashboard
         ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"
