@@ -1,5 +1,5 @@
 #!/bin/bash
-# tokensaveoptimizer CLI — Enhanced Edition
+# tokenso CLI — Enhanced Edition
 # https://github.com/Basharlouzon/Token-save---optimizer
 
 VERSION="2.0.0"
@@ -101,7 +101,7 @@ show_dashboard() {
 
     if [ ! -d ".ai-memory" ]; then
         echo -e "  ${YELLOW}⚠  Not initialized in this project.${NC}"
-        echo -e "  Run ${CYAN}tokensaveoptimizer install${NC} to get started.\n"
+        echo -e "  Run ${CYAN}tokenso install${NC} to get started.\n"
         _show_commands
         return
     fi
@@ -340,7 +340,7 @@ EOF
     echo ""
     echo -e "${BBLUE}======================================================${NC}"
     echo -e "${BGREEN}🎉 All done!${NC}"
-    echo -e "  Run ${CYAN}tokensaveoptimizer${NC} to see your live token dashboard."
+    echo -e "  Run ${CYAN}tokenso${NC} to see your live token dashboard."
     echo -e "  Star the repo ⭐  ${DIM}github.com/Basharlouzon/Token-save---optimizer${NC}"
     echo -e "${BBLUE}======================================================${NC}\n"
 }
@@ -363,18 +363,18 @@ run_reset() {
 # ─── UPDATE ─────────────────────────────────────────────────────────────────
 run_update() {
     echo -e "${BLUE}Pulling latest version from GitHub...${NC}"
-    INSTALL_DIR=$(dirname "$(which tokensaveoptimizer)")
+    INSTALL_DIR=$(dirname "$(which tokenso)")
     sudo curl -sSL \
-        "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokensaveoptimizer" \
-        -o "$INSTALL_DIR/tokensaveoptimizer"
-    sudo chmod +x "$INSTALL_DIR/tokensaveoptimizer"
+        "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" \
+        -o "$INSTALL_DIR/tokenso"
+    sudo chmod +x "$INSTALL_DIR/tokenso"
     echo -e "${GREEN}✅ Updated to latest version!${NC}"
-    tokensaveoptimizer --version
+    tokenso --version
 }
 
 # ─── VERSION ────────────────────────────────────────────────────────────────
 show_version() {
-    echo "tokensaveoptimizer v$VERSION"
+    echo "tokenso v$VERSION"
 }
 
 # ─── ROUTER ─────────────────────────────────────────────────────────────────

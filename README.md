@@ -10,7 +10,7 @@ AI coding agents are incredibly powerful, but they often suffer from a critical 
 
 ## ⚡ One-Time Global Install
 
-Run this **once** on your machine. It installs the `tokensaveoptimizer` command globally:
+Run this **once** on your machine. It installs the `tokenso` command globally:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer
 Now in **any project**, just run:
 
 ```bash
-tokensaveoptimizer install
+tokenso install
 ```
 
 An interactive wizard launches — pick any tools you use:
@@ -59,7 +59,7 @@ Select **multiple tools** with space-separated numbers, or `0` for all.
 
 ## 📊 Live Token Dashboard
 
-Just type `tokensaveoptimizer` in any initialized project:
+Just type `tokenso` in any initialized project:
 
 ```
   ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
@@ -105,12 +105,12 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 
 | Command | Description |
 |---|---|
-| `tokensaveoptimizer` | Live dashboard with stats |
-| `tokensaveoptimizer install` | Interactive project setup wizard |
-| `tokensaveoptimizer stats` | Detailed token report |
-| `tokensaveoptimizer reset` | Clear cumulative stats |
-| `tokensaveoptimizer update` | Self-update from GitHub |
-| `tokensaveoptimizer --version` | Show version |
+| `tokenso` | Live dashboard with stats |
+| `tokenso install` | Interactive project setup wizard |
+| `tokenso stats` | Detailed token report |
+| `tokenso reset` | Clear cumulative stats |
+| `tokenso update` | Self-update from GitHub |
+| `tokenso --version` | Show version |
 
 ---
 
