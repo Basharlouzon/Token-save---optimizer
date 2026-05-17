@@ -2,7 +2,10 @@
 # tokenso CLI — Enhanced Edition
 # https://github.com/Basharlouzon/Token-save---optimizer
 
-VERSION="2.1.0"
+# Safer pipelines without breaking the many `|| true` fallbacks used below.
+set -o pipefail
+
+VERSION="2.2.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -20,6 +23,8 @@ COST_PER_1M=3.00   # Claude Sonnet baseline
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
 stderr() { echo -e "$@" >&2; }
+die() { stderr "${RED}tokenso:${NC} $*"; exit 1; }
+warn() { stderr "${YELLOW}tokenso:${NC} $*"; }
 draw_bar() {
     local pct=$1   # 0-100
     local width=40
@@ -34,28 +39,30 @@ draw_bar() {
 
 fmt_num() { printf "%'d" "$1"; }
 
-cost_usd() {
-    local t=$1
-    local val=$(echo "scale=4; $t * $COST_PER_1M / 1000000" | bc 2>/dev/null || echo "0")
-    if [[ $val == .* ]]; then
-        val="0$val"
-    elif [[ $val == -.* ]]; then
-        val="-0${val#-}"
+# Compute USD cost. Prefer `bc` for precision, fall back to `awk` (POSIX, always
+# present) so missing `bc` does not silently return $0.0000.
+_cost_compute() {
+    local t=$1 rate=$2
+    if command -v bc &>/dev/null; then
+        echo "scale=4; $t * $rate / 1000000" | bc 2>/dev/null || echo "0"
+    else
+        awk -v t="$t" -v r="$rate" 'BEGIN { printf "%.4f", (t * r) / 1000000 }'
     fi
-    echo "$val"
 }
 
-cost_usd_rate() {
-    local t=$1
-    local rate=$2
-    local val=$(echo "scale=4; $t * $rate / 1000000" | bc 2>/dev/null || echo "0")
+_pad_decimal() {
+    local val=$1
     if [[ $val == .* ]]; then
-        val="0$val"
+        echo "0$val"
     elif [[ $val == -.* ]]; then
-        val="-0${val#-}"
+        echo "-0${val#-}"
+    else
+        echo "$val"
     fi
-    echo "$val"
 }
+
+cost_usd()      { _pad_decimal "$(_cost_compute "$1" "$COST_PER_1M")"; }
+cost_usd_rate() { _pad_decimal "$(_cost_compute "$1" "$2")"; }
 
 detect_tools() {
     local found=()
@@ -80,54 +87,89 @@ detect_tools() {
     echo "${found[@]}"
 }
 
+# Single source of truth for exclusions. Both `rg` and `find` branches filter
+# their output through the same regexes so the two paths cannot drift.
+EXCLUDE_FILE_PATTERN='\.(png|jpg|jpeg|gif|ico|pdf|zip|gz|tar|mp4|mp3|woff|woff2|ttf|eot|map|lock|db|exe|dll|so|dylib|class|jar|apk|ipa|bundle)$'
+EXCLUDE_DIR_PATTERN='(^|/)(\.ai-memory|\.git|node_modules|build|dist|\.dart_tool|Pods|\.gradle|\.venv|venv|__pycache__|\.idea|\.vscode|\.expo|\.next|\.nuxt|out|coverage|\.nyc_output|target|\.cargo)(/|$)'
+
 list_source_files() {
-    local exclude_pattern='\.(png|jpg|jpeg|gif|ico|pdf|zip|gz|tar|mp4|mp3|woff|woff2|ttf|eot|map|lock|db|exe|dll|so|dylib|class|jar|apk|ipa|bundle)$'
-    local exclude_dirs='(^|/)(\.ai-memory|\.git|node_modules|build|dist|\.dart_tool|Pods|\.gradle|\.venv|venv|__pycache__|\.idea|\.vscode|\.expo|\.next|\.nuxt|out|coverage|\.nyc_output|target|\.cargo)(/|$)'
     if command -v rg &>/dev/null; then
-        rg --files 2>/dev/null | grep -Ev "$exclude_dirs" | grep -Ev "$exclude_pattern"
+        rg --files 2>/dev/null \
+            | grep -Ev "$EXCLUDE_DIR_PATTERN" \
+            | grep -Ev "$EXCLUDE_FILE_PATTERN"
     else
-        find . -type f \
-            -not -path '*/\.*' \
-            -not -path '*/node_modules/*' \
-            -not -path '*/build/*' \
-            -not -path '*/dist/*' \
-            -not -path '*/.git/*' \
-            -not -path '*/.dart_tool/*' \
-            -not -path '*/Pods/*' \
-            -not -path '*/.gradle/*' \
-            -not -path '*/.venv/*' \
-            -not -path '*/venv/*' \
-            -not -path '*/__pycache__/*' \
-            -not -path '*/.idea/*' \
-            -not -path '*/.vscode/*' \
-            -not -path '*/.expo/*' \
-            -not -path '*/.next/*' \
-            -not -path '*/.nuxt/*' \
-            -not -path '*/out/*' \
-            -not -path '*/coverage/*' \
-            -not -path '*/.nyc_output/*' \
-            -not -path '*/target/*' \
-            -not -path '*/.cargo/*' \
-            2>/dev/null | grep -Ev "$exclude_pattern"
+        find . -type f 2>/dev/null \
+            | grep -Ev "$EXCLUDE_DIR_PATTERN" \
+            | grep -Ev "$EXCLUDE_FILE_PATTERN"
+    fi
+}
+
+# ─── JSON helpers ──────────────────────────────────────────────────────────
+# Prefer `jq` for correctness; fall back to a small grep/awk reader for the
+# four fields we actually use. The fallback cannot handle escaped quotes or
+# values inside nested objects — schema is flat by design.
+
+_json_string() {
+    # Read a string field. Args: file, key. Echoes empty on miss.
+    local file=$1 key=$2
+    [ -f "$file" ] || return 0
+    if command -v jq &>/dev/null; then
+        jq -r --arg k "$key" '.[$k] // ""' "$file" 2>/dev/null
+    else
+        grep -o "\"$key\"[ :]*\"[^\"]*\"" "$file" 2>/dev/null \
+            | head -1 | cut -d'"' -f4
+    fi
+}
+
+_json_int() {
+    # Read an integer field. Args: file, key, default. Validates numeric.
+    local file=$1 key=$2 default=${3:-0}
+    local val=""
+    if [ -f "$file" ]; then
+        if command -v jq &>/dev/null; then
+            val=$(jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null)
+        else
+            val=$(grep -o "\"$key\"[ :]*-\?[0-9][0-9]*" "$file" 2>/dev/null \
+                | head -1 | grep -o -- '-\?[0-9][0-9]*$')
+        fi
+    fi
+    if [[ "$val" =~ ^-?[0-9]+$ ]]; then
+        echo "$val"
+    else
+        [ -n "$val" ] && warn "non-numeric '$key' in $file, resetting to $default"
+        echo "$default"
+    fi
+}
+
+_json_history() {
+    # Echo history values as a space-separated list.
+    local file=$1
+    [ -f "$file" ] || return 0
+    if command -v jq &>/dev/null; then
+        jq -r '(.history // []) | map(tostring) | join(" ")' "$file" 2>/dev/null
+    else
+        grep -o '"history"[ :]*\[[^]]*\]' "$file" 2>/dev/null \
+            | head -1 | tr -d '[]' | tr ',' ' '
     fi
 }
 
 load_or_init_stats() {
     STATS_FILE=".ai-memory/optimizer-stats.json"
     if [ -f "$STATS_FILE" ]; then
-        SESSIONS=$(grep -o '"sessions"[ :]*[0-9]*' "$STATS_FILE" | cut -d: -f2 | tr -d ' ' || echo 0)
-        CUMULATIVE_SAVED=$(grep -o '"cumulative_saved"[ :]*[0-9]*' "$STATS_FILE" | cut -d: -f2 | tr -d ' ' || echo 0)
-        INSTALL_DATE=$(grep -o '"installed"[ :]*"[^"]*"' "$STATS_FILE" | cut -d'"' -f4 || echo "")
-        [ -z "$SESSIONS" ] && SESSIONS=0
-        [ -z "$CUMULATIVE_SAVED" ] && CUMULATIVE_SAVED=0
+        SESSIONS=$(_json_int "$STATS_FILE" sessions 0)
+        CUMULATIVE_SAVED=$(_json_int "$STATS_FILE" cumulative_saved 0)
+        INSTALL_DATE=$(_json_string "$STATS_FILE" installed)
         [ -z "$INSTALL_DATE" ] && INSTALL_DATE=$(date +"%Y-%m-%d")
-        
-        # Load history array
-        local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' "$STATS_FILE" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
-        if [ -n "$raw_hist" ]; then
-            IFS=',' read -r -a HISTORY_ARR <<< "$raw_hist"
-        else
-            HISTORY_ARR=()
+
+        HISTORY_ARR=()
+        local hist
+        hist=$(_json_history "$STATS_FILE")
+        if [ -n "$hist" ]; then
+            # shellcheck disable=SC2206
+            local raw=( $hist )
+            for v in "${raw[@]}"; do
+                [[ "$v" =~ ^-?[0-9]+$ ]] && HISTORY_ARR+=( "$v" )
+            done
         fi
     else
         SESSIONS=0; CUMULATIVE_SAVED=0; INSTALL_DATE=$(date +"%Y-%m-%d"); HISTORY_ARR=()
@@ -138,23 +180,26 @@ save_stats() {
     local sessions_to_save=$1
     local saved_to_save=$2
     local new_saved=$3
-    
-    # Load history
-    local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' ".ai-memory/optimizer-stats.json" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
+    local stats_file=".ai-memory/optimizer-stats.json"
+
     local hist_arr=()
-    if [ -n "$raw_hist" ]; then
-        IFS=',' read -r -a hist_arr <<< "$raw_hist"
+    local hist
+    hist=$(_json_history "$stats_file")
+    if [ -n "$hist" ]; then
+        # shellcheck disable=SC2206
+        local raw=( $hist )
+        for v in "${raw[@]}"; do
+            [[ "$v" =~ ^-?[0-9]+$ ]] && hist_arr+=( "$v" )
+        done
     fi
-    
-    # Append newest record
+
+    # Append newest record, cap at last 10
     hist_arr+=("$new_saved")
-    
-    # Restrict to last 10 entries
     local len=${#hist_arr[@]}
     if [ $len -gt 10 ]; then
         hist_arr=("${hist_arr[@]:$((len - 10))}")
     fi
-    
+
     # Build history array string
     local hist_json="["
     for ((i=0; i<${#hist_arr[@]}; i++)); do
@@ -165,8 +210,9 @@ save_stats() {
     done
     hist_json="${hist_json}]"
 
-    cat > ".ai-memory/optimizer-stats.json" << EOF
+    cat > "$stats_file" << EOF
 {
+  "schema": 1,
   "version": "$VERSION",
   "installed": "$INSTALL_DATE",
   "sessions": $sessions_to_save,
@@ -506,6 +552,7 @@ RULES_EOF
         INSTALL_DATE=$(date +"%Y-%m-%d")
         cat > ".ai-memory/optimizer-stats.json" << EOF
 {
+  "schema": 1,
   "version": "$VERSION",
   "installed": "$INSTALL_DATE",
   "sessions": 0,
@@ -784,9 +831,12 @@ generate_html_dashboard() {
     local active_agents=$(detect_tools)
     
     # Format history as JSON array
-    local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' ".ai-memory/optimizer-stats.json" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
     local history_json="[]"
-    [ -n "$raw_hist" ] && history_json="[$raw_hist]"
+    local hist
+    hist=$(_json_history ".ai-memory/optimizer-stats.json")
+    if [ -n "$hist" ]; then
+        history_json="[$(echo "$hist" | tr ' ' ',' | sed 's/,,*/,/g; s/^,//; s/,$//')]"
+    fi
     
     # Format milestones as JSON array
     local milestones_json="[]"
@@ -819,11 +869,15 @@ generate_html_dashboard() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tokenso — Context Optimizer Dashboard</title>
     
-    <!-- Outfit & Fira Code Fonts -->
+    <!-- Outfit & Fira Code Fonts (with system-font fallback so the dashboard
+         renders fully even offline). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+          rel="stylesheet"
+          media="all"
+          onerror="this.media='print'">
+
     <script>
     window.TOKENSO_DATA = {
         projectName: "${project_name}",
@@ -858,8 +912,8 @@ EOF
             --text-dim: #9898a3;
             --gold: #ffd60a;
             
-            --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            --font-mono: 'Fira Code', 'Courier New', monospace;
+            --font-sans: 'Outfit', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
         }
         
         * {
@@ -1483,18 +1537,20 @@ EOF
                     <div>
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Runs per day:</span>
-                                <span id="val-runs">15</span>
+                                <span>AI runs per day:</span>
+                                <span><span id="val-runs">15</span> runs/day</span>
                             </div>
-                            <input type="range" class="slider" id="slider-runs" min="1" max="100" value="15">
+                            <input type="range" class="slider" id="slider-runs" min="1" max="100" value="15"
+                                   aria-label="AI runs per day">
                         </div>
-                        
+
                         <div class="slider-group" style="margin-bottom: 25px;">
                             <div class="slider-label">
-                                <span>Avg tokens saved/run:</span>
-                                <span id="val-tokens">0</span>
+                                <span>Avg tokens saved per run:</span>
+                                <span><span id="val-tokens">0</span> tokens/run</span>
                             </div>
-                            <input type="range" class="slider" id="slider-tokens" min="1000" max="100000" step="500" value="5000">
+                            <input type="range" class="slider" id="slider-tokens" min="1000" max="100000" step="500" value="5000"
+                                   aria-label="Average tokens saved per run">
                         </div>
                         
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
@@ -1562,45 +1618,68 @@ EOF
     
     <!-- JavaScript Interaction Engine -->
     <script>
+        function normalizeData(raw) {
+            const d = raw && typeof raw === 'object' ? raw : {};
+            const num = (v, fallback) => {
+                const n = typeof v === 'number' ? v : parseFloat(v);
+                return Number.isFinite(n) ? n : fallback;
+            };
+            return {
+                projectName:     d.projectName     || '—',
+                dateExported:    d.dateExported    || '',
+                activeAgents:    d.activeAgents    || '',
+                filesCount:      num(d.filesCount, 0),
+                rawTokens:       num(d.rawTokens, 0),
+                mapTokens:       num(d.mapTokens, 0),
+                savedTokens:     num(d.savedTokens, 0),
+                pct:             num(d.pct, 0),
+                compRatio:       d.compRatio != null ? String(d.compRatio) : '0',
+                costSaved:       d.costSaved != null ? String(d.costSaved) : '0',
+                sessions:        num(d.sessions, 0),
+                cumulativeSaved: num(d.cumulativeSaved, 0),
+                costCum:         d.costCum != null ? String(d.costCum) : '0',
+                history:         Array.isArray(d.history) ? d.history.filter(v => Number.isFinite(+v)).map(v => +v) : [],
+                milestones:      Array.isArray(d.milestones) ? d.milestones : []
+            };
+        }
+        function debounce(fn, ms) {
+            let t;
+            return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+        }
+        const setText = (id, v) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = v;
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
+            window.TOKENSO_DATA = normalizeData(window.TOKENSO_DATA);
             const data = window.TOKENSO_DATA;
-            
-            // Populating raw metadata
-            document.getElementById('dt-project').textContent = data.projectName;
-            document.getElementById('dt-date').textContent = data.dateExported;
-            document.getElementById('dt-files').textContent = data.filesCount;
-            document.getElementById('dt-tools').textContent = data.activeAgents || 'None detected';
-            
-            // Populate card values
-            document.getElementById('card-sessions').textContent = data.sessions;
-            document.getElementById('card-tokens').textContent = data.cumulativeSaved.toLocaleString();
-            document.getElementById('card-savings').textContent = '$' + parseFloat(data.costCum).toFixed(2);
-            document.getElementById('card-ratio').textContent = data.compRatio + 'x';
-            
-            // Gauge setup
-            document.getElementById('gauge-pct').textContent = data.pct + '%';
-            document.getElementById('gauge-comp-lbl').textContent = data.compRatio + 'x';
-            
-            // Timeline
+
+            setText('dt-project', data.projectName);
+            setText('dt-date', data.dateExported);
+            setText('dt-files', data.filesCount);
+            setText('dt-tools', data.activeAgents || 'None detected');
+
+            setText('card-sessions', data.sessions);
+            setText('card-tokens', data.cumulativeSaved.toLocaleString());
+            setText('card-savings', '$' + parseFloat(data.costCum || 0).toFixed(2));
+            setText('card-ratio', data.compRatio + 'x');
+
+            setText('gauge-pct', data.pct + '%');
+            setText('gauge-comp-lbl', data.compRatio + 'x');
+
             renderMilestones();
-            
-            // SVG Line Chart
             drawSavingsChart();
-            window.addEventListener('resize', drawSavingsChart);
-            
-            // Circular Gauge Trigger
+            window.addEventListener('resize', debounce(drawSavingsChart, 120));
             drawGauge();
             
-            // ROI simulator initialization
             const sliderRuns = document.getElementById('slider-runs');
             const sliderTokens = document.getElementById('slider-tokens');
-            
-            // Set dynamic default range for tokens slider
-            if (data.savedTokens > 0) {
+
+            if (data.savedTokens > 0 && sliderTokens) {
                 sliderTokens.value = Math.min(Math.max(data.savedTokens, 1000), 100000);
             }
-            
-            // Handle model select clicks
+
             const modelButtons = document.querySelectorAll('.model-btn');
             modelButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1610,53 +1689,66 @@ EOF
                     updateROI();
                 });
             });
-            
-            // Hook simulator sliders
-            sliderRuns.addEventListener('input', updateROI);
-            sliderTokens.addEventListener('input', updateROI);
-            
-            // Run initial update
+
+            if (sliderRuns) sliderRuns.addEventListener('input', updateROI);
+            if (sliderTokens) sliderTokens.addEventListener('input', updateROI);
             updateROI();
         });
-        
-        // Gauge drawing helper
+
+        let _gaugeRunning = false;
         function drawGauge() {
-            const pct = window.TOKENSO_DATA.pct;
+            const pct = Math.max(0, Math.min(100, window.TOKENSO_DATA.pct));
             const bar = document.getElementById('gauge-bar');
-            if (!bar) return;
-            
+            if (!bar || _gaugeRunning) return;
+            _gaugeRunning = true;
             const circumference = 2 * Math.PI * 80;
             const offset = circumference - (pct / 100) * circumference;
-            
-            setTimeout(() => {
+            bar.setAttribute('aria-label', `Compression ratio gauge: ${pct}% saved`);
+            bar.setAttribute('role', 'img');
+            requestAnimationFrame(() => {
                 bar.style.strokeDashoffset = offset;
-            }, 100);
+                _gaugeRunning = false;
+            });
         }
-        
-        // Milestones timeline renderer
+
         function renderMilestones() {
             const milestones = window.TOKENSO_DATA.milestones;
             const container = document.getElementById('timeline-container');
+            if (!container) return;
+            container.textContent = '';
             if (!milestones || milestones.length === 0) {
-                container.innerHTML = `<div style="text-align:center;padding:30px 10px;color:var(--text-dim);font-size:13px;">No memory milestones recorded. Save one using <code>tokenso save "Milestone text"</code></div>`;
+                const empty = document.createElement('div');
+                empty.style.cssText = 'text-align:center;padding:30px 10px;color:var(--text-dim);font-size:13px;';
+                empty.innerHTML = 'No memory milestones recorded. Save one using <code>tokenso save "Milestone text"</code>';
+                container.appendChild(empty);
                 return;
             }
-            
-            let html = '';
-            // reverse array to show newest milestones first
             const reversed = [...milestones].reverse();
+            const frag = document.createDocumentFragment();
             reversed.forEach((ms, idx) => {
-                html += `
-                <div class="timeline-item">
-                    <div class="timeline-dot"></div>
-                    <div class="timeline-card">
-                        <div class="timeline-card-header">Milestone #${reversed.length - idx}</div>
-                        <div style="line-height: 1.4;">${ms}</div>
-                    </div>
-                </div>
-                `;
+                const num = reversed.length - idx;
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.setAttribute('role', 'listitem');
+                item.setAttribute('aria-label', `Milestone ${num}: ${ms}`);
+                const dot = document.createElement('div');
+                dot.className = 'timeline-dot';
+                const card = document.createElement('div');
+                card.className = 'timeline-card';
+                const header = document.createElement('div');
+                header.className = 'timeline-card-header';
+                header.textContent = `Milestone #${num}`;
+                const body = document.createElement('div');
+                body.style.lineHeight = '1.4';
+                body.textContent = String(ms);
+                card.appendChild(header);
+                card.appendChild(body);
+                item.appendChild(dot);
+                item.appendChild(card);
+                frag.appendChild(item);
             });
-            container.innerHTML = html;
+            container.setAttribute('role', 'list');
+            container.appendChild(frag);
         }
         
         // ROI Simulator engine
@@ -1696,16 +1788,23 @@ EOF
             document.getElementById('roi-server').textContent = '🖥️ Equivalent to ' + VPSMonths.toLocaleString() + ' months of modern VPS hosting paid off!';
         }
         
-        // SVG Spline Line Chart drawing helper
+        // SVG Spline Line Chart drawing helper (memoized on history+width)
+        let _chartMemo = '';
         function drawSavingsChart() {
             const history = window.TOKENSO_DATA.history;
             const container = document.getElementById('chart-container');
+            if (!container) return;
             if (!history || history.length === 0) {
                 container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px;">No historical runs recorded. Run <code>tokenso save</code> to track.</div>`;
+                _chartMemo = '';
                 return;
             }
-            
+
             const width = container.clientWidth || 550;
+            if (width === 0) return;
+            const memoKey = history.join(',') + '|' + width;
+            if (memoKey === _chartMemo) return;
+            _chartMemo = memoKey;
             const height = 180;
             const margin = { top: 20, right: 30, bottom: 25, left: 45 };
             
@@ -1773,48 +1872,55 @@ EOF
                 
                 <!-- Line path outline -->
                 <path d="${pathD}" fill="none" stroke="var(--cyan)" stroke-width="3.5" filter="url(#shadow)" stroke-linecap="round"></path>
+                <!-- Dashed accent for non-color trend discrimination -->
+                <path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1" stroke-dasharray="4 4" stroke-linecap="round"></path>
             `;
-            
-            // Add interactive markers
+
             points.forEach((pt, idx) => {
                 svgHtml += `
                 <circle cx="${pt.x}" cy="${pt.y}" r="5" fill="var(--bg)" stroke="var(--cyan)" stroke-width="2.5" class="chart-point" data-idx="${idx}" data-val="${pt.val}"></circle>
                 `;
             });
-            
+
             svgHtml += `</svg>`;
             container.innerHTML = svgHtml;
-            
-            // Add tooltip hover events
+
             const dots = container.querySelectorAll('.chart-point');
             const tooltip = document.getElementById('chart-tooltip');
-            
+            if (!tooltip) return;
+
+            const showTooltip = (target) => {
+                const idx = target.getAttribute('data-idx');
+                const val = parseInt(target.getAttribute('data-val'));
+                const cost = ((val * models[selectedModel].rate) / 1000000).toFixed(4);
+                tooltip.style.opacity = '1';
+                tooltip.innerHTML = `
+                    <div style="font-weight:600;color:var(--cyan);margin-bottom:2px;font-family:var(--font-sans);">Run #${parseInt(idx)+1}</div>
+                    <div style="font-size:12px;font-family:var(--font-sans);">Saved: <span style="color:var(--emerald);font-weight:600;">${val.toLocaleString()}</span> tokens</div>
+                    <div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);">Value: $${cost}</div>
+                `;
+                const rect = target.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                tooltip.style.left = (rect.left - containerRect.left + 12) + 'px';
+                tooltip.style.top = (rect.top - containerRect.top - 55) + 'px';
+                target.setAttribute('r', '7.5');
+                target.style.cursor = 'pointer';
+            };
+            const hideTooltip = (target) => {
+                tooltip.style.opacity = '0';
+                target.setAttribute('r', '5');
+            };
+
             dots.forEach(dot => {
-                dot.addEventListener('mouseenter', (e) => {
-                    const idx = e.target.getAttribute('data-idx');
-                    const val = parseInt(e.target.getAttribute('data-val'));
-                    const cost = ((val * models[selectedModel].rate) / 1000000).toFixed(4);
-                    
-                    tooltip.style.opacity = '1';
-                    tooltip.innerHTML = `
-                        <div style="font-weight:600;color:var(--cyan);margin-bottom:2px;font-family:var(--font-sans);">Run #${parseInt(idx)+1}</div>
-                        <div style="font-size:12px;font-family:var(--font-sans);">Saved: <span style="color:var(--emerald);font-weight:600;">${val.toLocaleString()}</span> tokens</div>
-                        <div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);">Value: $${cost}</div>
-                    `;
-                    
-                    const rect = e.target.getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-                    tooltip.style.left = (rect.left - containerRect.left + 12) + 'px';
-                    tooltip.style.top = (rect.top - containerRect.top - 55) + 'px';
-                    
-                    e.target.setAttribute('r', '7.5');
-                    e.target.style.cursor = 'pointer';
-                });
-                
-                dot.addEventListener('mouseleave', (e) => {
-                    tooltip.style.opacity = '0';
-                    e.target.setAttribute('r', '5');
-                });
+                dot.setAttribute('tabindex', '0');
+                dot.setAttribute('role', 'button');
+                dot.setAttribute('aria-label',
+                    `Run ${parseInt(dot.getAttribute('data-idx')) + 1}: ${parseInt(dot.getAttribute('data-val')).toLocaleString()} tokens saved`);
+                dot.addEventListener('mouseenter', (e) => showTooltip(e.target));
+                dot.addEventListener('mouseleave', (e) => hideTooltip(e.target));
+                dot.addEventListener('focus',      (e) => showTooltip(e.target));
+                dot.addEventListener('blur',       (e) => hideTooltip(e.target));
+                dot.addEventListener('pointerdown',(e) => showTooltip(e.target));
             });
         }
     </script>
@@ -2070,10 +2176,12 @@ run_clean() {
 # ─── RESET ──────────────────────────────────────────────────────────────────
 run_reset() {
     if [ -f ".ai-memory/optimizer-stats.json" ]; then
-        local installed_date=$(grep -o '"installed"[ :]*"[^"]*"' ".ai-memory/optimizer-stats.json" | cut -d'"' -f4 2>/dev/null || date +"%Y-%m-%d")
+        local installed_date
+        installed_date=$(_json_string ".ai-memory/optimizer-stats.json" installed)
         [ -z "$installed_date" ] && installed_date=$(date +"%Y-%m-%d")
         cat > ".ai-memory/optimizer-stats.json" << EOF
 {
+  "schema": 1,
   "version": "$VERSION",
   "installed": "$installed_date",
   "sessions": 0,

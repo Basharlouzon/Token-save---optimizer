@@ -91,6 +91,8 @@ Once installed, **you don't need to do anything**. The AI reads the rules automa
 
 ## 🧠 Interactive Mindmap
 
+> Requires `.ai-memory` to exist — run `tokenso install` (or `bash scripts/init-smart-search.sh .`) first.
+
 Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers code nodes, fires synapses to link them, and saves the optimized map:
 
 ```
@@ -150,7 +152,7 @@ Generate a premium offline dashboard with interactive charts, ROI simulator, and
 tokenso stats --html
 ```
 
-Opens a glassmorphic single-file HTML page with savings trend charts, a radial gauge, model cost comparisons, and an interactive savings calculator — no server required.
+Opens a glassmorphic single-file HTML page with savings trend charts, a radial gauge, model cost comparisons, and an interactive savings calculator — no server required. The dashboard ships with a system-font fallback so it renders fully even when offline.
 
 ### Export Formats
 
@@ -169,7 +171,7 @@ Search your codebase without flooding the AI's context window:
 tokenso search "handleSubmit"
 ```
 
-Returns file path matches from the repo map plus top code snippets with highlighted matches — capped at 15 results to keep context lean:
+Returns file path matches from the repo map plus top code snippets with highlighted matches — capped at the top 15 source-code matches to keep AI context lean (file-path matches from the repo map are not capped):
 
 ```
 🔍 Zero-Waste Code Search  Query: 'handleSubmit'
@@ -237,6 +239,68 @@ Shows a syntax-highlighted directory tree with file/folder counts and estimated 
 | `tokenso reset` | Clear cumulative stats history |
 | `tokenso update` | Self-update from GitHub |
 | `tokenso --version` | Show version |
+
+---
+
+## 🩺 Troubleshooting
+
+### `tokenso: command not found`
+
+The installer appended a PATH block to your shell profile but the current shell hasn't picked it up yet.
+
+```bash
+source ~/.zshrc          # or ~/.bashrc / ~/.bash_profile / ~/.profile
+# or just open a new terminal window
+```
+
+If it still isn't found, check that the install directory is on PATH:
+
+```bash
+echo "$PATH" | tr ':' '\n' | grep -E '(/usr/local/bin|\.local/bin)'
+```
+
+### Permission denied on install
+
+The installer falls back to `sudo` automatically when the target is system-owned. If `sudo` is unavailable, point the installer at a user-writable location:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
+```
+
+On macOS, if Gatekeeper blocks the script, open **System Settings → Privacy & Security** and allow the file, or run `xattr -d com.apple.quarantine /usr/local/bin/tokenso`.
+
+### Missing dependencies
+
+Tokenso prefers but does not require these tools:
+
+| Tool | What it improves | Without it |
+|---|---|---|
+| `jq` | Robust JSON parsing of stats | Falls back to a small grep/awk reader |
+| `bc` | High-precision USD math | Falls back to `awk` arithmetic |
+| `rg` (ripgrep) | Faster file enumeration and search | Falls back to `find` / `grep` |
+| `tree` | Pretty repo-map rendering | Falls back to a flat `find` listing |
+
+Install any of these via your package manager (`brew install jq ripgrep tree`, `apt install jq ripgrep tree`, etc.).
+
+### Reinstalling / uninstalling
+
+The installer is idempotent — re-running `install.sh` will not duplicate PATH or completion blocks (they are bracketed with `# >>> tokenso path >>>` markers).
+
+To fully uninstall:
+
+```bash
+rm -f "$(command -v tokenso)" "$HOME/.tokenso_completion.sh"
+# Remove the marker-bracketed blocks from your shell profile (~/.zshrc, ~/.bashrc, etc.)
+```
+
+### Corrupt or stale stats
+
+If `tokenso` warns about non-numeric fields in `.ai-memory/optimizer-stats.json`, reset the cumulative history while keeping your install date:
+
+```bash
+tokenso reset
+```
 
 ---
 
