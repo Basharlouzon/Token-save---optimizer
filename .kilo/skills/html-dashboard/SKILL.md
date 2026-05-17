@@ -1,62 +1,74 @@
 # HTML Dashboard Generation
 
-Generate premium glassmorphic HTML dashboards with SVG charts, interactive widgets, and responsive layouts. Use when creating visual reports from `.ai-memory/optimizer-stats.json` data.
-
-## Overview
-
-The HTML dashboard is a single-file HTML page with no external dependencies. It visualizes Tokenso optimizer stats including token savings, session history, cost reduction, and milestones.
+Generate premium glassmorphic HTML dashboards with SVG charts, interactive widgets, and responsive layouts. Implementation lives in `generate_html_dashboard()` at `bin/tokenso:794-1946`.
 
 ## Invocation
 
 ```bash
-tokenso stats --html    # generates tokenso-dashboard.html in the current directory
+tokenso stats --html    # generates tokenso-dashboard.html in current directory
 ```
+
+Output is a **single-file HTML page** with zero external dependencies. All CSS, JS, and SVG are inline.
+
+## Data Source
+
+Reads from `.ai-memory/optimizer-stats.json`:
+
+```json
+{
+  "schema": 1,
+  "version": "2.2.0",
+  "installed": "2026-05-17",
+  "sessions": 12,
+  "cumulative_saved": 274693,
+  "last_run": "2026-05-17",
+  "history": [{"date": "2026-05-17", "tokens_saved": 45000}]
+}
+```
+
+JSON parsing prefers `jq` with grep/awk fallback for the 4 flat fields.
 
 ## Design System
 
 ### Glassmorphic Theme
 
-The dashboard uses a dark glassmorphic design:
-
 | Element | Style |
 |---------|-------|
-| Background | Dark gradient (`#0f0f1a` → `#1a1a2e`) |
-| Cards | Frosted glass (`rgba(255,255,255,0.05)`) with `backdrop-filter: blur(10px)` |
-| Borders | Subtle (`rgba(255,255,255,0.1)`) |
-| Text | White primary, `rgba(255,255,255,0.7)` secondary |
-| Accent | Cyan (`#00d4ff`), Green (`#00ff88`), Purple (`#a855f7`) |
+| Background | Dark gradient `#0f0f1a` → `#1a1a2e` |
+| Cards | `rgba(255,255,255,0.05)` with `backdrop-filter: blur(10px)` |
+| Borders | `rgba(255,255,255,0.1)` |
+| Text primary | `#ffffff` |
+| Text secondary | `rgba(255,255,255,0.7)` |
+| Accent cyan | `#00d4ff` |
+| Accent green | `#00ff88` |
+| Accent purple | `#a855f7` |
+| Cost baseline | $3.00/1M tokens (Claude Sonnet) |
 
-### Color Palette
+### System Font Stack
 
+```css
+font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 ```
-Primary accent:  #00d4ff (cyan)
-Success:         #00ff88 (green)
-Warning:         #fbbf24 (amber)
-Error:           #ef4444 (red)
-Info:            #a855f7 (purple)
-Neutral:         #64748b (slate)
-```
+
+No web fonts — renders fully offline.
 
 ## Dashboard Components
 
 ### 1. Header
+ASCII art "TOKENSO" banner with animated gradient text. Version number from stats JSON.
 
-ASCII art "TOKENSO" banner with animated gradient text and version number.
-
-### 2. Stats Cards
-
-Top-row stat cards showing:
+### 2. Stats Cards (top row, 4-column grid)
 - Total Sessions
-- Tokens Saved
-- Estimated Cost Saved
-- Average Savings/Session
+- Tokens Saved (formatted with commas)
+- Estimated Cost Saved (USD, calculated as `tokens × $3.00 / 1,000,000`)
+- Average Savings per Session
 
-Each card has an icon, value, label, and subtle glow effect.
+Each card: icon, large formatted number, label, subtle glow on hover.
 
 ### 3. SVG Charts
 
 #### Radial Gauge
-A circular SVG gauge showing savings percentage (0-100%). Uses `stroke-dasharray` and `stroke-dashoffset` for the arc.
+Circular progress gauge for savings percentage. Uses `stroke-dasharray` / `stroke-dashoffset`:
 
 ```svg
 <circle cx="60" cy="60" r="50" stroke="#1e293b" stroke-width="10" fill="none" />
@@ -65,92 +77,78 @@ A circular SVG gauge showing savings percentage (0-100%). Uses `stroke-dasharray
 ```
 
 #### Bar Chart
-Session-by-session token savings as vertical bars with gradient fills.
+Per-session token savings from `history[]` array. Vertical bars with gradient fills.
 
 #### Sparkline
-Compact inline trend chart using SVG `<polyline>`.
+Compact inline trend using SVG `<polyline>`. Rendered in the terminal dashboard too via `draw_sparkline()` (`bin/tokenso:226-260`).
 
 ### 4. ROI Simulator
+Interactive widget with inputs:
+- Token cost per 1M tokens (default $3.00)
+- Average session tokens saved
+- Sessions per day
 
-Interactive widget that lets users input:
-- Their token cost per 1M tokens
-- Their average session length
-- Number of sessions per day
-
-Shows projected monthly/yearly savings with animated counters.
+Calculates projected monthly/yearly savings with animated counters.
 
 ### 5. Milestone Timeline
-
-Vertical timeline of milestones from `.ai-memory/state.md`, with timestamps and descriptions.
+Vertical timeline reading milestones from `.ai-memory/state.md` completed tasks.
 
 ### 6. Model Comparison Table
+ROI by AI model:
 
-Table showing ROI by AI model (Claude, GPT-4, Gemini, etc.) with cost per 1M tokens and estimated savings.
+| Model | Cost/1M tokens | Est. savings |
+|-------|---------------|-------------|
+| Claude Sonnet | $3.00 | baseline |
+| Claude Opus | $15.00 | 5x |
+| GPT-4o | $2.50 | 0.83x |
+| Gemini 1.5 Pro | $1.25 | 0.42x |
 
-## Data Source
+### 7. Footer
+Version, repository link, "Star the repo" CTA.
 
-All data comes from `.ai-memory/optimizer-stats.json`:
-
-```json
-{
-  "sessions": 12,
-  "tokens_saved": 274693,
-  "installed": "2026-05-17",
-  "cost_per_1m": 3.00,
-  "history": [
-    { "date": "2026-05-17", "tokens_saved": 45000 }
-  ]
-}
-```
-
-The `generate_html_dashboard()` function in `bin/tokenso` (lines ~794-1946) reads this JSON and generates the full HTML.
-
-## Layout Structure
+## Layout
 
 ```html
 <html>
-<head>
-  <style>
-    /* All CSS inline — no external deps */
-    /* Responsive grid: 4-col on desktop, 2-col on tablet, 1-col on mobile */
-  </style>
-</head>
+<head><style>/* All CSS inline */</style></head>
 <body>
   <div class="dashboard">
     <header>ASCII banner</header>
-    <div class="stats-grid">4 stat cards</div>
+    <div class="stats-grid">4 cards</div>
     <div class="charts-grid">
-      <div class="radial-gauge">SVG gauge</div>
+      <div class="gauge">SVG radial</div>
       <div class="bar-chart">SVG bars</div>
     </div>
-    <div class="roi-simulator">Interactive widget</div>
-    <div class="milestone-timeline">Timeline</div>
-    <div class="model-table">Comparison table</div>
-    <footer>Credits + version</footer>
+    <div class="roi-simulator">Interactive</div>
+    <div class="timeline">Milestones</div>
+    <div class="model-table">Comparison</div>
+    <footer>Credits</footer>
   </div>
-  <script>
-    /* All JS inline */
-    /* ROI calculator logic */
-    /* Animated counters */
-    /* No external libraries */
-  </script>
+  <script>/* All JS inline */</script>
 </body>
 </html>
 ```
 
+Responsive grid: 4-col desktop, 2-col tablet, 1-col mobile. Chart resize is debounced. Chart points support keyboard focus and touch alongside hover.
+
+## Accessibility
+
+- ARIA labels on gauge, milestones, chart points.
+- Units on ROI sliders ("15 runs/day", "5,000 tokens/run").
+- Dashed accent line on savings chart for colorblind users.
+
 ## Adding New Widgets
 
-To add a new component to the dashboard:
-
-1. Add the data extraction in `generate_html_dashboard()` (read from stats JSON).
-2. Add the HTML/CSS for the new section.
-3. If interactive, add JS event handlers in the `<script>` block.
-4. Keep everything in the single-file output — no external dependencies.
-5. Test with `tokenso stats --html` and open in a browser.
+1. Extract data from stats JSON in `generate_html_dashboard()`.
+2. Add HTML/CSS section to the generated output.
+3. Add JS handlers if interactive.
+4. Keep single-file — no external dependencies.
+5. Test: `tokenso stats --html` → open in browser.
 
 ## Customization
 
-Users can customize the dashboard by:
-- Modifying `cost_per_1m` in `.ai-memory/optimizer-stats.json` for their pricing tier.
-- Adding milestones via `tokenso save "milestone description"`.
-- Regenerating at any time with `tokenso stats --html`.
+Users customize by:
+- Modifying `cumulative_saved` and `sessions` via normal `tokenso save` usage.
+- Adding milestones via `tokenso save "description"`.
+- The `history[]` array tracks last 10 runs for sparkline/bar chart.
+- Regenerate anytime with `tokenso stats --html`.

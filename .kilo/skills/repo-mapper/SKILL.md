@@ -1,28 +1,21 @@
 # Repo Mapper — Compressed Repository Map Generation
 
-Generate ultra-compressed repository maps with token estimation so AI agents can understand project structure without expensive `find` or `tree` commands. Use when setting up a new project or when the project structure has changed significantly.
-
-## Overview
-
-The repo mapper creates `.ai-memory/repo-map.txt` — a tiny file (~20 lines) that replaces expensive operations like `ls -R`, `find`, or `tree`. AI agents read this compressed map instead of exploring the entire codebase.
+Generate ultra-compressed repository maps so AI agents understand project structure without expensive `find`, `tree`, or `ls -R` commands. Implementation lives in `scripts/init-smart-search.sh` (64 lines) and is invoked by `tokenso save`, `tokenso install`, and `tokenso map`.
 
 ## Invocation
 
 ```bash
-# Via Tokenso CLI (preferred)
-tokenso map                        # view the map with colorized output
-tokenso save                       # regenerate map + update stats
-
-# Via script directly
-bash .ai-memory/scripts/init-smart-search.sh .
-
-# Via the source script
-bash scripts/init-smart-search.sh .
+tokenso map                                  # view colorized map with token estimate
+tokenso save                                 # regenerate map + update stats + state.md
+tokenso save --silent                        # regenerate silently (no output)
+tokenso save "milestone note"                # regenerate + log milestone
+tokenso install                              # generates initial map during setup
+bash .ai-memory/scripts/init-smart-search.sh .  # direct script invocation
 ```
 
-## Map Format
+## Map Output
 
-The output is a compressed tree structure with token estimates:
+Stored at `.ai-memory/repo-map.txt`. A tiny compressed tree (~20 lines for most projects):
 
 ```
 tokenso/  [~2,400 tokens]
@@ -42,121 +35,104 @@ tokenso/  [~2,400 tokens]
 
 ## Generation Algorithm
 
-### Primary: `tree`
-If `tree` is available on the system:
+From `scripts/init-smart-search.sh`:
 
+### Primary: `tree`
 ```bash
 tree -I "$EXCLUDES" --dirsfirst -F
 ```
 
 ### Fallback: `find`
-If `tree` is not installed:
-
 ```bash
 find . -not -path "*/$EXCLUDES/*" -not -name "$EXCLUDES" | sort
 ```
 
-### Exclusion Patterns
+## Exclusion Patterns
 
-The following are always excluded to keep the map small and relevant:
+Defined at `bin/tokenso:92-93` — shared by `rg` and `find` paths to prevent drift:
 
+**Excluded directories:**
 ```
-.git
-node_modules
-__pycache__
-dist
-build
-.next
-.nuxt
-.target
-vendor
-.bundle
-.min
-.DS_Store
-*.lock
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-*.min.js
-*.min.css
-*.woff
-*.woff2
-*.ttf
-*.eot
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.ico
-*.svg
-*.mp4
-*.mp3
-*.wav
-*.pdf
-*.zip
-*.tar
-*.gz
+.ai-memory .git node_modules build dist .dart_tool Pods .gradle
+.venv venv __pycache__ .idea .vscode .expo .next .nuxt out
+coverage .nyc_output target .cargo
 ```
 
-## Token Estimation
-
-The mapper estimates token count using the formula:
-
+**Excluded file extensions:**
 ```
-estimated_tokens = (word_count × 4) / 3
+.png .jpg .jpeg .gif .ico .pdf .zip .gz .tar .mp4 .mp3
+.woff .woff2 .ttf .eot .map .lock .db .exe .dll .so
+.dylib .class .jar .apk .ipa .bundle
 ```
 
-This provides a rough estimate so agents can gauge the cost of reading a file before committing context.
+The `list_source_files()` function (`bin/tokenso:95-105`) applies these via:
+```bash
+EXCLUDE_FILE_PATTERN='\.(png|jpg|jpeg|gif|...)$'
+EXCLUDE_DIR_PATTERN='(^|/)(\.git|node_modules|build|...)(/|$)'
+```
+
+## Token Estimation Formula
+
+From `run_save()` at `bin/tokenso:656-658`:
+
+```bash
+raw_tokens=$(( raw_words * 13 / 10 ))     # full scan estimate
+map_tokens=$(( map_words * 13 / 10 ))      # map estimate
+saved_tokens=$(( raw_tokens - map_tokens ))
+```
+
+The 13/10 ratio (1.3 tokens per word) is used consistently. The stats dashboard displays the savings.
+
+## Map Lifecycle
+
+1. **Initial creation:** `tokenso install` runs `bash .ai-memory/scripts/init-smart-search.sh .`.
+2. **Refresh:** `tokenso save` regenerates the map each time (overwrites `.ai-memory/repo-map.txt`).
+3. **View:** `tokenso map` displays the map with colorized output and token weight estimate.
+4. **Clean:** `tokenso clean` deletes `.ai-memory/repo-map.txt` along with all other `.ai-memory/` contents.
+5. **Auto-recover:** If `.ai-memory/scripts/init-smart-search.sh` is missing when `tokenso save` runs, it copies from `scripts/` or downloads from GitHub.
+
+## Script Copying
+
+During `tokenso install`:
+```bash
+# Local copy available (from repo)
+cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
+
+# No local copy (remote install)
+curl -sSL "https://raw.githubusercontent.com/.../scripts/init-smart-search.sh" \
+  -o .ai-memory/scripts/init-smart-search.sh
+```
+
+The script is self-contained at 64 lines and has no dependencies beyond `tree` (preferred) or `find` (fallback).
 
 ## Staleness Detection
 
-The map can become stale when files are added, removed, or renamed. Detect staleness by comparing the map's modification time against recent file changes:
+Check if the map is outdated:
 
 ```bash
-# Check if any source file is newer than the map
-find . -newer .ai-memory/repo-map.txt -not -path "./.git/*" -not -path "./node_modules/*" | head -5
+# Find files newer than the map
+find . -newer .ai-memory/repo-map.txt \
+  -not -path "./.git/*" \
+  -not -path "./node_modules/*" \
+  -not -path "./.ai-memory/*" | head -5
 ```
 
-If any files are found, suggest a refresh:
-
-```
-The repo map appears stale (files modified since last map generation).
-Run `tokenso save` to refresh it.
-```
-
-## Project-Type Exclusions
-
-The mapper can apply additional exclusions based on project type:
-
-| Project Type | Additional Exclusions |
-|-------------|----------------------|
-| Flutter/Dart | `.dart_tool`, `android/`, `ios/`, `.pub-cache` |
-| Node.js | `.next/`, `.nuxt/`, `coverage/`, `.cache/` |
-| Python | `__pycache__/`, `.venv/`, `*.egg-info/`, `.tox/` |
-| Rust | `target/` |
-| Go | `vendor/` (if using modules) |
-| Java/Kotlin | `.gradle/`, `build/`, `.idea/` |
+If any files are found, the map is stale — run `tokenso save` to refresh.
 
 ## Integration with Other Commands
 
-| Command | Integration |
-|---------|-------------|
-| `tokenso map` | Displays the map with colorized output |
-| `tokenso save` | Regenerates the map, then updates stats and state.md |
-| `tokenso install` | Generates the initial map during project setup |
-| `tokenso search` | Uses the map to locate candidate files before content search |
-
-## Map as Search Index
-
-The repo map doubles as a lightweight search index:
-
-- **Path-based search**: `tokenso search "auth"` finds files with "auth" in their path.
-- **Structure understanding**: Agents read the map to find relevant directories without `ls`.
-- **Size awareness**: Token estimates help agents decide which files to read.
+| Command | Map Interaction |
+|---------|----------------|
+| `tokenso map` | Displays the map with syntax highlighting |
+| `tokenso save` | Regenerates map, calculates token savings, updates stats |
+| `tokenso install` | Generates initial map |
+| `tokenso search` | Uses map for fuzzy path matching (Pass 1 of search) |
+| `tokenso clean` | Deletes the map |
+| `tokenso state` | Reads state.md (not the map, but co-located in `.ai-memory/`) |
 
 ## Best Practices
 
-- **Regenerate after structural changes** — new directories, renamed files, deleted modules.
-- **Don't exclude source files** — the map should show all code files, just not binary/generated ones.
-- **Keep it under 50 lines** — if the map is too large, it defeats the purpose. Add more exclusions.
-- **Commit the scripts, not the map** — `.ai-memory/` is gitignored. The map regenerates per-machine.
+- Regenerate after structural changes (new dirs, renamed files).
+- Keep map under 50 lines — if larger, add more exclusions to `EXCLUDE_DIR_PATTERN`.
+- `.ai-memory/` is gitignored — map regenerates per-machine per-project.
+- The map is consumed by `tokenso search` as a fast path index — keeping it fresh improves search quality.

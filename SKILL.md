@@ -7,36 +7,36 @@ source: local
 
 # Tokenso — Context Optimizer & Token Saver
 
-This skill prevents context window bloat, eliminates token waste, and stops agents from duplicating efforts or spinning in circles.
-
-As an AI agent, strictly follow these rules when this skill is active or when operating in a repository with `.ai-memory` initialized by Tokenso.
+Prevent context window bloat, eliminate token waste, and stop agents from duplicating efforts. Follow these rules when this skill is active or when operating in a repository with `.ai-memory` initialized by Tokenso.
 
 ## 1. The Search Diet (Zero-Waste Searching)
 
-- **Do not read full files blindly**: Before using tools to read an entire file, check its size or use targeted search.
-- **Find first, read second**: ALWAYS use semantic search, `grep`, or lightweight commands (`rg -l`) to find the *names* of files first.
-- **Targeted viewing**: Once a file is identified, read *only the specific line ranges* you need. NEVER load a 2,000-line file into context just to read a single function.
-- **Batch search patterns**: Combine multiple patterns into a single pass: `rg -n "pattern1|pattern2|pattern3"` instead of three separate searches.
+- **Do not read full files blindly**: Check file size first. Use targeted search to find file names before reading.
+- **Find first, read second**: ALWAYS use `rg -l`, `grep -rl`, or `tokenso search <query>` to locate files first.
+- **Targeted viewing**: Read only specific line ranges. NEVER load a 2,000-line file to read one function.
+- **Batch search patterns**: Combine patterns: `rg -n "pattern1|pattern2|pattern3"` instead of sequential searches.
+- **Use `tokenso search`**: Fuzzy path matching on repo map + source snippet scan capped at 15 matches.
 
 ## 2. Token Budget Awareness
 
-Before any large operation:
+Tokenso calculates tokens as `words × 13 / 10`. Cost baseline: **$3.00/1M tokens** (Claude Sonnet).
 
-1. **Estimate context cost.** A 500-line file ≈ 2,000 tokens. A `find` on a large repo ≈ 5,000+ tokens.
-2. **Warn if approaching limits.** If you've read >50% of context, note: "Context is getting heavy — compressing before continuing."
-3. **Prefer compressed sources.** Read `.ai-memory/repo-map.txt` (tiny) over `tree` or `find` (expensive).
+1. **Estimate cost.** A 500-line file ≈ 2,000 tokens.
+2. **Warn if heavy.** If >50% of context used: "Context is getting heavy — compressing before continuing."
+3. **Prefer compressed sources.** Read `.ai-memory/repo-map.txt` (~20 lines) instead of `tree`/`find`.
 
 ## 3. Smart Initialization
 
-- **Use the Repo Map**: Run `tokenso map` (preferred) or `bash .ai-memory/scripts/init-smart-search.sh .` from the project root.
-- **Read the Map**: This generates an ultra-compressed tree at `.ai-memory/repo-map.txt`. Read this tiny file instead of manually exploring.
-- **Auto-refresh stale maps**: If the map is older than recently modified source files, suggest `tokenso save` to refresh.
+- **Use the Repo Map**: Run `tokenso map` (preferred) or `bash .ai-memory/scripts/init-smart-search.sh .`.
+- **Auto-refresh stale maps**: If map mtime < recent file changes, suggest `tokenso save`.
+- **Exclusions are shared** between `rg` and `find` (defined in `bin/tokenso`): excludes `.git`, `node_modules`, `build`, `dist`, `.ai-memory`, binary files, images, lock files.
 
-## 4. The Memory Refresh Protocol (Prevent Duplication & Looping)
+## 4. The Memory Refresh Protocol
 
-- **Check State**: Before significant decisions, ALWAYS read `.ai-memory/state.md` (or run `tokenso state`).
-- **Write State**: After milestones or repeated actions, compress findings into `.ai-memory/state.md` via `tokenso save "[note]"`.
-- **Context Pruning**: After writing state, acknowledge you are offloading raw context. If you detect a loop, **STOP**, update memory, and ask for clarification.
+- **Check State**: Before significant decisions, read `.ai-memory/state.md` (or run `tokenso state`).
+- **Write State**: `tokenso save "note"` or `tokenso save -m "note"`. Use `--silent` (`-s`) to suppress output.
+- **Auto-install**: If `.ai-memory/` is missing, `tokenso save` offers to run `tokenso install`.
+- **Context Pruning**: After writing state, acknowledge offloading. If looping, STOP, update state, ask for help.
 
 ### `state.md` format
 
@@ -45,54 +45,44 @@ Before any large operation:
 
 ## Completed Tasks
 - [x] Initialized Tokenso smart search memory
-- [x] Implemented auth flow with JWT refresh tokens
 
 ## Next Actions
-- [ ] Wire `/api/logout` to invalidate refresh tokens
-- [ ] Add e2e test for the expired-token redirect
+- [ ] Wire `/api/logout`
 
 ## Blocked
-- [ ] Waiting on API key from ops team
+- [ ] Waiting on API key
 
 ## Decisions
-! Chose SQLite over PostgreSQL for local-first storage.
-! Refresh tokens live in httpOnly cookies, not localStorage.
+! Chose SQLite over PostgreSQL.
 
 ## Key Context & Architecture
-! `useAuth()` is the single source of truth — do not read `req.user` directly.
+! `useAuth()` is the single source of truth.
 ```
 
 ## 5. Context Compression Checklist
 
-When context feels heavy:
-
-1. Identify key facts, decisions, and remaining tasks.
+1. Identify key facts, decisions, remaining tasks.
 2. Write to `state.md` using the format above.
-3. Run `tokenso save --silent` to update stats.
-4. Note: "Compressed context into state.md — previous raw details offloaded."
+3. Run `tokenso save --silent`.
+4. Note: "Compressed context into state.md."
 
 ## 6. Cross-Agent Compatibility
-
-Inject these rules into other agents' configs:
 
 ```bash
 bash scripts/apply-cross-rules.sh .            # current project
 bash scripts/apply-cross-rules.sh ../other-app # different project
+tokenso install                                # interactive wizard (16 tools)
 ```
 
-Supported: Claude Code, Cline, Roo, Kilo, Gemini CLI, Open Code, Aider, Continue.dev, Cursor, Windsurf, Void, Zed, PearAI, GitHub Copilot, Amazon Q, Augment Code.
+Supported (16 + Antigravity global): Claude Code, Cline, Roo, Kilo, Gemini CLI, Open Code, Aider, Continue.dev, Cursor, Windsurf, Void, Zed, PearAI, GitHub Copilot, Amazon Q, Antigravity.
+
+Rules use versioned markers (`MARKER_VERSION="v1"`) for safe re-application.
 
 ## 7. Stop Duplication
 
-If you find yourself in a loop:
-
-1. **STOP** immediately.
-2. Update `.ai-memory/state.md` with what you've tried and why it failed.
-3. Ask the user for clarification before continuing.
+If looping: **STOP** → update `.ai-memory/state.md` with what failed → ask user for clarification.
 
 ## Output Format
-
-When updating memory or pruning context:
 
 ```
 ✓ Tokenso: condensed insights into .ai-memory/state.md and pruned immediate context.

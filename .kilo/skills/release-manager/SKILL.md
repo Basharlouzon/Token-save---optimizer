@@ -1,92 +1,86 @@
 # Release Manager
 
-Manage version bumps, changelogs, git tags, and GitHub releases for the Tokenso project. Use when preparing a new version for release.
+Manage version bumps, changelogs, git tags, and GitHub releases for the Tokenso project.
 
 ## Version Scheme
 
-Tokenso uses semantic versioning (`MAJOR.MINOR.PATCH`):
+Tokenso uses semver (`MAJOR.MINOR.PATCH`). Version is defined at `bin/tokenso:8`:
 
-- **PATCH** (`2.2.0` → `2.2.1`): Bug fixes, install script fixes, small improvements.
-- **MINOR** (`2.2.0` → `2.3.0`): New commands, new features, backward-compatible changes.
-- **MAJOR** (`2.2.0` → `3.0.0`): Breaking changes to CLI interface or config format.
+```bash
+VERSION="2.2.0"
+```
 
-The current version is defined in `bin/tokenso` at the `VERSION=` line.
+- **PATCH** — bug fixes, install script fixes, small improvements.
+- **MINOR** — new commands, new features, backward-compatible changes.
+- **MAJOR** — breaking changes to CLI interface or config format.
 
 ## Pre-Release Checklist
 
-Before starting a release, verify:
-
-1. **Working tree is clean.** `git status` shows no uncommitted changes.
-2. **All changes are committed.** Review `git log origin/master..HEAD` for unpushed commits.
-3. **Tests pass** (if applicable — this is a bash project, so manual smoke-test).
-4. **README is current.** Version references and feature docs match reality.
-5. **Install script works.** Test: `curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash`
+1. **Clean tree.** `git status` — no uncommitted changes.
+2. **All pushed.** `git log origin/master..HEAD` — no unpushed commits.
+3. **README current.** Version badge, "What's new" section, command table match reality.
+4. **Install script works.** Test the curl | bash flow:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
+   ```
+5. **Smoke test.** `tokenso map`, `tokenso state`, `tokenso search "test"`, `tokenso stats` all run without errors.
+6. **Cross-agent injection works.** `bash scripts/apply-cross-rules.sh .` runs clean.
 
 ## Release Process
 
 ### Step 1: Version Bump
 
-Update the version string in `bin/tokenso`:
-
+Edit `bin/tokenso` line 8:
 ```bash
-# Find the current version line
-rg -n 'VERSION=' bin/tokenso
-
-# Edit it to the new version (e.g., 2.2.0 → 2.3.0)
+VERSION="X.Y.Z"
 ```
 
-### Step 2: Generate Changelog
+### Step 2: Update README
 
-Create a changelog from commits since the last tag:
+- Update the version badge at line 3: `version-X.Y.Z`
+- Add/update the "What's new in X.Y.Z" section at line 15.
+- Verify the command table (line 240+) is current.
+
+### Step 3: Generate Changelog
 
 ```bash
-# Get the last tag
-git describe --tags --abbrev=0
-
-# Generate changelog from that tag to HEAD
-git log --oneline <last-tag>..HEAD
-
-# Or use conventional commits format
-git log <last-tag>..HEAD --pretty=format:"- %s"
+LAST_TAG=$(git describe --tags --abbrev=0)
+git log "$LAST_TAG"..HEAD --pretty=format:"- %s"
 ```
 
-### Step 3: Commit the Version Bump
+### Step 4: Commit
 
 ```bash
-git add bin/tokenso
+git add bin/tokenso README.md
 git commit -m "Bump version to X.Y.Z"
 ```
 
-### Step 4: Create Git Tag
+### Step 5: Tag
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
 
 ## What's New
-- Feature 1
-- Feature 2
+- Feature descriptions
 
 ## Fixes
-- Bug fix 1"
+- Bug fix descriptions"
 ```
 
-### Step 5: Push to Remote
+### Step 6: Push
 
 ```bash
 git push origin master
 git push origin vX.Y.Z
 ```
 
-### Step 6: Create GitHub Release
+### Step 7: GitHub Release
 
 ```bash
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "## What's New
-- Feature 1
-
-## Fixes
-- Bug fix 1
+- Features
 
 ## Installation
 \`\`\`bash
@@ -94,23 +88,20 @@ curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer
 \`\`\`"
 ```
 
-### Step 7: Post-Release
+### Step 8: Post-Release
 
-Bump to the next development version:
+Bump to next `-dev` version in `bin/tokenso` and push:
 
 ```bash
-# Update bin/tokenso VERSION to X.Y.(Z+1)-dev
-# Commit: "Prepare for next development iteration"
+# Edit VERSION="X.Y.(Z+1)-dev"
 git commit -m "Prepare for next development iteration"
 git push origin master
 ```
 
 ## Conventional Commits
 
-Follow these prefixes for automatic changelog generation:
-
-| Prefix | Section in Changelog |
-|--------|---------------------|
+| Prefix | Changelog Section |
+|--------|------------------|
 | `feat:` | Features |
 | `fix:` | Bug Fixes |
 | `docs:` | Documentation |
@@ -118,27 +109,28 @@ Follow these prefixes for automatic changelog generation:
 | `perf:` | Performance |
 | `test:` | Tests |
 | `chore:` | Maintenance |
-| `ci:` | CI/CD |
+
+## Files That Reference Version
+
+| File | Location |
+|------|----------|
+| `bin/tokenso` | Line 8: `VERSION="2.2.0"` |
+| `README.md` | Line 3: version badge |
+| `.ai-memory/optimizer-stats.json` | Auto-updated by `tokenso save` |
+| Install script output | Displays version during install |
 
 ## Rollback
 
-If a release has critical issues:
-
 ```bash
-# Delete the remote tag
-git push origin :refs/tags/vX.Y.Z
-
-# Delete the GitHub release
-gh release delete vX.Y.Z
-
-# Revert the version bump commit
-git revert <commit-hash>
+git push origin :refs/tags/vX.Y.Z      # delete remote tag
+gh release delete vX.Y.Z               # delete GitHub release
+git revert <commit-hash>               # revert version bump
 git push origin master
 ```
 
 ## Tokenso-Specific Notes
 
-- The version string appears in `bin/tokenso` only (line ~3: `VERSION="2.2.0"`).
-- The README has a "What's new in X.Y.Z" section that should be updated for feature releases.
-- The install script downloads from `master` branch, so the pushed binary is what users get immediately.
-- Always test the install script after changes to `install.sh` or `bin/tokenso`.
+- The install script downloads from `master` branch — pushed changes go live immediately.
+- The `tokenso update` command self-updates from GitHub master.
+- Always test install after changes to `install.sh` or `bin/tokenso`.
+- `apply-cross-rules.sh` has `MARKER_VERSION="v1"` — bump if rules text changes.

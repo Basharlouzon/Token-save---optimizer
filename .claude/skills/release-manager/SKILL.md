@@ -1,98 +1,84 @@
 ---
 name: release-manager
-description: "Use when preparing a new version release. Handles version bumping, changelog generation, git tagging, and GitHub release creation for the Tokenso project."
+description: "Use when preparing a new version release. Handles version bumping, changelog generation, git tagging, and GitHub release creation."
 ---
 
 # Release Manager
 
-Manage version bumps, changelogs, git tags, and GitHub releases.
+## Version Location
 
-## Version Scheme
-
-Semantic versioning (`MAJOR.MINOR.PATCH`):
-
-- **PATCH**: Bug fixes, small improvements.
-- **MINOR**: New commands, backward-compatible features.
-- **MAJOR**: Breaking changes to CLI or config format.
-
-Version is defined in `bin/tokenso` at the `VERSION=` line.
+`bin/tokenso` line 8: `VERSION="2.2.0"`
 
 ## Pre-Release Checklist
 
-1. `git status` — working tree clean.
-2. `git log origin/master..HEAD` — all commits pushed.
-3. README version references match.
-4. Install script tested: `curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash`
+1. `git status` — clean tree.
+2. `git log origin/master..HEAD` — all pushed.
+3. README version badge (line 3) + "What's new" section current.
+4. Install script tested.
+5. Smoke test: `tokenso map`, `tokenso state`, `tokenso search "test"`, `tokenso stats`.
+6. `bash scripts/apply-cross-rules.sh .` runs clean.
 
-## Release Process
+## Process
 
-### Step 1: Version Bump
+### 1. Version Bump
+Edit `bin/tokenso:8` → `VERSION="X.Y.Z"`
+
+### 2. Update README
+- Line 3: version badge → `version-X.Y.Z`
+- Line 15: "What's new in X.Y.Z" section
+
+### 3. Changelog
 ```bash
-rg -n 'VERSION=' bin/tokenso
-# Edit to new version
+LAST_TAG=$(git describe --tags --abbrev=0)
+git log "$LAST_TAG"..HEAD --pretty=format:"- %s"
 ```
 
-### Step 2: Generate Changelog
+### 4. Commit + Tag
 ```bash
-git describe --tags --abbrev=0          # last tag
-git log <last-tag>..HEAD --pretty=format:"- %s"
-```
-
-### Step 3: Commit
-```bash
-git add bin/tokenso
+git add bin/tokenso README.md
 git commit -m "Bump version to X.Y.Z"
-```
-
-### Step 4: Tag
-```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
 
 ## What's New
-- Feature 1
+- ...
 
 ## Fixes
-- Bug fix 1"
+- ..."
 ```
 
-### Step 5: Push
+### 5. Push + Release
 ```bash
 git push origin master
 git push origin vX.Y.Z
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."
 ```
 
-### Step 6: GitHub Release
-```bash
-gh release create vX.Y.Z \
-  --title "vX.Y.Z" \
-  --notes "## What's New
-- Feature 1
-
-## Installation
-\`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
-\`\`\`"
-```
-
-### Step 7: Post-Release
-Bump to next `-dev` version and push.
+### 6. Post-Release
+Bump to `-dev` version and push.
 
 ## Conventional Commits
 
-| Prefix | Section |
-|--------|---------|
-| `feat:` | Features |
-| `fix:` | Bug Fixes |
-| `docs:` | Documentation |
-| `refactor:` | Refactoring |
-| `perf:` | Performance |
-| `chore:` | Maintenance |
+`feat:` `fix:` `docs:` `refactor:` `perf:` `test:` `chore:`
+
+## Files Referencing Version
+
+| File | Location |
+|------|----------|
+| `bin/tokenso` | Line 8 |
+| `README.md` | Line 3 (badge) |
+| `.ai-memory/optimizer-stats.json` | Auto-updated |
 
 ## Rollback
 
 ```bash
 git push origin :refs/tags/vX.Y.Z
 gh release delete vX.Y.Z
-git revert <commit-hash>
+git revert <hash>
 git push origin master
 ```
+
+## Notes
+
+- Install script downloads from `master` — changes go live immediately.
+- `tokenso update` self-updates from GitHub master.
+- `MARKER_VERSION="v1"` in `apply-cross-rules.sh` — bump if rules text changes.

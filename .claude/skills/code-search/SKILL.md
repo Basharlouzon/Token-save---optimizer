@@ -1,98 +1,82 @@
 ---
 name: code-search
-description: "Use when you need to find code, trace dependencies, or understand codebase structure without reading entire files. Enforces a search hierarchy that minimizes token spend while maximizing information gained."
+description: "Use when finding code, tracing dependencies, or understanding codebase structure without reading entire files. Enforces zero-waste search hierarchy with token cost estimation."
 ---
 
 # Code Search — Zero-Waste Code Snippet Utility
 
-Search code intelligently without overflowing the context window.
-
-## Search Hierarchy (Always Follow This Order)
-
-### Level 1: Repo Map (cheapest)
-Read `.ai-memory/repo-map.txt` first. This gives you the full file tree with token estimates in ~20 lines.
+## The Tokenso Search Command
 
 ```bash
-tokenso map                    # view the map
-cat .ai-memory/repo-map.txt    # read directly
+tokenso search <query>
 ```
 
-### Level 2: Filename Search (cheap)
-Find files by name or path pattern without reading content:
+Two passes internally (`bin/tokenso:689-792`):
 
+1. **Fuzzy Path Search** — scans `.ai-memory/repo-map.txt`. Not capped.
+2. **Source Code Snippet Scan** — `rg` (preferred) or `grep` (fallback). Capped at **15 matches**.
+
+Source files filtered through unified exclusions: `.git`, `node_modules`, `build`, `dist`, `.ai-memory`, plus binary/image/archive extensions.
+
+Output:
+```
+🔍 Zero-Waste Code Search  Query: 'handleSubmit'
+
+  [ 📁 Codebase Blueprint Matches ]
+    • src/forms/LoginForm.tsx
+    • src/hooks/useForm.ts
+
+  [ 📝 Source Code Matches (Max 15) ]
+  📂 src/forms/LoginForm.tsx
+     Line 42: const handleSubmit = async (e) => {
+
+  Searched 47 files | Found 3 matches | Showing top 2 | Done in 0s
+```
+
+## Search Hierarchy
+
+### Level 1: Repo Map (cheapest)
 ```bash
-rg -l "pattern" --type-add 'src:*.{ts,tsx,js,py,go,rs,bash,sh}' -t src
-rg -l "UserService" -t ts
+tokenso map
+cat .ai-memory/repo-map.txt
+```
+
+### Level 2: Filename Search
+```bash
+rg -l "pattern" -t ts
 find . -name "*.service.ts" -not -path "*/node_modules/*"
 ```
 
-### Level 3: Content Search (moderate)
-Search inside files, returning matching lines with context:
-
+### Level 3: Content Search
 ```bash
-rg -n "pattern" -C 2           # 2 lines of context around each match
-rg -n "export function" -t ts  # find all exports
-rg -n "TODO|FIXME|HACK"        # find technical debt markers
+rg -n "pattern" -C 2
+rg -n "TODO|FIXME|HACK"
 ```
 
-### Level 4: Targeted File Read (expensive, use sparingly)
-Only after identifying the exact file and line range:
-
+### Level 4: Targeted Read
 ```bash
 sed -n '100,150p' src/file.ts
 ```
 
-## Pattern Matching Quick Reference
+## Pattern Quick Reference
 
 | Goal | Pattern |
 |------|---------|
-| Function definitions | `rg -n "^(export\s+)?(async\s+)?function\s+\w+"` |
-| Class declarations | `rg -n "^class\s+\w+"` |
-| Imports/requires | `rg -n "^import.*from|^const.*require"` |
-| API endpoints | `rg -n "(app\|router)\.(get\|post\|put\|delete)\("` |
-| Type definitions | `rg -n "^export (type\|interface)\s+"` |
-| Environment variables | `rg -n "process\.env\.\w+"` |
-| Error handling | `rg -n "try\s*\{|catch\s*\(" ` |
-
-## Snippet Extraction
-
-Never read an entire file to see one function:
-
-```bash
-rg -n "function myFunc" -A 20 file.ts
-sed -n '50,100p' file.ts
-rg -n "^export" file.ts
-```
-
-## Cross-File Tracing
-
-1. `rg -l "import.*ModuleName"` — find all files importing the module.
-2. Read only the import section (first ~30 lines) of each file.
-3. `rg -n "export.*ModuleName"` in the source file.
-4. Never load both files fully.
+| Functions | `rg -n "^(export\s+)?(async\s+)?function\s+\w+"` |
+| Classes | `rg -n "^class\s+\w+"` |
+| Imports | `rg -n "^import.*from\|^const.*require"` |
+| API routes | `rg -n "(app\|router)\.(get\|post\|put\|delete)\("` |
+| Types | `rg -n "^export (type\|interface)\s+"` |
+| Env vars | `rg -n "process\.env\.\w+"` |
 
 ## Token Cost Estimation
 
-- **1 line** ≈ 4 tokens
-- **100 lines** ≈ 400 tokens
-- **500 lines** ≈ 2,000 tokens
-- **2,000 lines** ≈ 8,000 tokens (avoid full reads)
+Formula: `words × 13 / 10`. Rough guide: 100 lines ≈ 400 tokens. Use `wc -l` before reading. If > 200 lines, use targeted reads only.
 
-Use `wc -l file.ts` before reading. If > 200 lines, use targeted reads only.
+## Anti-Patterns
 
-## Using `tokenso search`
-
-```bash
-tokenso search "pattern"       # fuzzy path match + content snippet scan
-tokenso search "auth"          # finds auth-related files and shows snippets
-```
-
-Results capped at 15 to prevent context overflow.
-
-## Anti-Patterns to Avoid
-
-- Reading entire files to find one function — use `rg -n` first.
+- Reading entire files for one function — use `rg -n` first.
 - Running `find` on the whole repo — use the repo map.
 - Sequential single-pattern searches — combine with `|`.
-- Reading the same file twice — record key details in state.md.
-- Searching `node_modules/`, `.git/`, build output — always exclude.
+- Reading same file twice — record in `state.md`.
+- Searching `node_modules/`, `.git/` — excluded by default.
