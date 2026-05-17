@@ -36,8 +36,31 @@ fi
 
 echo "✅ Installed successfully!"
 echo ""
-echo "You can now run this command in ANY project:"
-echo -e "\033[0;36m  tokenso\033[0m"
-echo "or get started immediately with:"
-echo -e "\033[0;36m  tokenso run\033[0m"
-echo ""
+
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo -e "\033[1;33m⚠️  Warning: $INSTALL_DIR is not in your active PATH.\033[0m"
+    echo -e "To run \033[0;36mtokenso\033[0m globally, add it to your shell configuration:"
+    echo ""
+    current_shell=$(basename "$SHELL")
+    if [ "$current_shell" = "zsh" ]; then
+        echo -e "  \033[0;32mexport PATH=\"\$PATH:$INSTALL_DIR\"\033[0m"
+    else
+        echo -e "  \033[0;32mexport PATH=\"\$PATH:$INSTALL_DIR\"\033[0m"
+    fi
+    echo ""
+else
+    echo "You can now run this command in ANY project:"
+    echo -e "\033[0;36m  tokenso\033[0m"
+    echo "or get started immediately with:"
+    echo -e "\033[0;36m  tokenso run\033[0m"
+    echo ""
+
+    # Prompt the user to initialize rule configurations in the current project
+    if [ -t 0 ]; then
+        read -p "Would you like to configure Tokenso memory rules in the current directory now? (y/N): " configure_now
+        if [[ "$configure_now" =~ ^[yY](es)?$ ]]; then
+            echo ""
+            "$INSTALL_DIR/tokenso" install
+        fi
+    fi
+fi

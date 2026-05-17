@@ -37,6 +37,12 @@ cost_usd() {
     echo "$(echo "scale=4; $t * $COST_PER_1M / 1000000" | bc 2>/dev/null || echo "0")"
 }
 
+cost_usd_rate() {
+    local t=$1
+    local rate=$2
+    echo "$(echo "scale=4; $t * $rate / 1000000" | bc 2>/dev/null || echo "0")"
+}
+
 detect_tools() {
     local found=()
     [ -f ".claudecode" ]                          && found+=("Claude Code")
@@ -58,6 +64,16 @@ detect_tools() {
     [ -f ".pearai" ]                              && found+=("PearAI")
     [ -d "$HOME/.gemini/antigravity/skills/context-optimizer" ] && found+=("Antigravity ✓ global")
     echo "${found[@]}"
+}
+
+list_source_files() {
+    # Exclude .ai-memory, .git, node_modules, build, dist, and common binary/lock extensions
+    local exclude_pattern='\.(png|jpg|jpeg|gif|ico|pdf|zip|gz|tar|mp4|mp3|woff|woff2|ttf|eot|map|lock|db|exe|dll|so|dylib|class|jar|apk|ipa|bundle)$'
+    if command -v rg &>/dev/null; then
+        rg --files 2>/dev/null | grep -v '\.ai-memory' | grep -v '\.git' | grep -Ev "$exclude_pattern"
+    else
+        find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' -not -path '*/build/*' -not -path '*/dist/*' -not -path '*/.git/*' 2>/dev/null | grep -Ev "$exclude_pattern"
+    fi
 }
 
 load_or_init_stats() {
@@ -111,12 +127,12 @@ show_dashboard() {
     load_or_init_stats
 
     # ── Scan current project ──
-    RAW_WORDS=0
-    if command -v rg &>/dev/null; then
-        RAW_WORDS=$(rg --files 2>/dev/null | grep -v '\.ai-memory' | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    local file_list
+    file_list=$(list_source_files)
+    if [ -n "$file_list" ]; then
+        RAW_WORDS=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
     else
-        RAW_WORDS=$(find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' \
-          -not -path '*/build/*' -not -path '*/dist/*' 2>/dev/null | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+        RAW_WORDS=0
     fi
     [ -z "$RAW_WORDS" ] && RAW_WORDS=0
 
@@ -163,9 +179,31 @@ show_dashboard() {
     printf "  %-32s %s\n" "Total cost saved (est.):"   "$(echo -e "${BGREEN}\$${COST_CUM}${NC}")"
     echo ""
 
+    # ── Model Savings Comparative Matrix ──
+    echo -e "  ${BOLD}── ESTIMATED ROI BY MODEL ───────────────────────────${NC}"
+    printf "  %-20s %-10s %-15s %s\n" "Model" "Rate/1M" "This Session" "All-Time"
+    printf "  %-20s %-10s %-15s %s\n" "─────" "───────" "────────────" "────────"
+    
+    local sonnet_sess=$(cost_usd_rate $SAVED_TOKENS 3.00)
+    local sonnet_cum=$(cost_usd_rate $CUMULATIVE_SAVED 3.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude 3.5 Sonnet" "\$3.00" "\$${sonnet_sess}" "\$${sonnet_cum}"
+    
+    local opus_sess=$(cost_usd_rate $SAVED_TOKENS 15.00)
+    local opus_cum=$(cost_usd_rate $CUMULATIVE_SAVED 15.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude 3.0 Opus" "\$15.00" "\$${opus_sess}" "\$${opus_cum}"
+    
+    local gemini_sess=$(cost_usd_rate $SAVED_TOKENS 1.25)
+    local gemini_cum=$(cost_usd_rate $CUMULATIVE_SAVED 1.25)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Gemini 1.5 Pro" "\$1.25" "\$${gemini_sess}" "\$${gemini_cum}"
+    
+    local gpt4o_sess=$(cost_usd_rate $SAVED_TOKENS 2.50)
+    local gpt4o_cum=$(cost_usd_rate $CUMULATIVE_SAVED 2.50)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "GPT-4o" "\$2.50" "\$${gpt4o_sess}" "\$${gpt4o_cum}"
+    echo ""
+
     # ── Memory state ──
     if [ -f ".ai-memory/state.md" ]; then
-        local last_line=$(grep -m1 "^\!" ".ai-memory/state.md" 2>/dev/null || echo "")
+        local last_line=$(grep "^\!" ".ai-memory/state.md" 2>/dev/null | tail -n 1 || echo "")
         [ -n "$last_line" ] && echo -e "  ${DIM}💬 Last memory note: $last_line${NC}\n"
     fi
 
@@ -369,15 +407,52 @@ EOF
 # ─── SAVE & UPDATE ──────────────────────────────────────────────────────────
 run_save() {
     local silent=false
-    if [[ "$1" == "--silent" || "$1" == "-s" ]]; then
-        silent=true
-    fi
+    local message=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --silent|-s)
+                silent=true
+                shift
+                ;;
+            -m|--message)
+                message="$2"
+                shift 2
+                ;;
+            *)
+                # If there's already a message, append to it, otherwise set it
+                if [ -n "$message" ]; then
+                    message="$message $1"
+                else
+                    message="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
 
     if [ ! -d ".ai-memory" ]; then
-        if [ "$silent" = false ]; then
-            echo -e "${RED}❌ Project not initialized. Run 'tokenso install' first.${NC}"
+        if [ "$silent" = true ]; then
+            return 1
         fi
-        return 1
+
+        echo -e "${YELLOW}⚠️  .ai-memory is not initialized in this project.${NC}"
+        [ -t 0 ] || exec < /dev/tty
+        read -p "  Would you like to initialize it now? [Y/n]: " init_choice
+        if [[ "$init_choice" =~ ^[Nn]$ ]]; then
+            echo -e "  ${RED}Aborting. Save requires initialization.${NC}"
+            return 1
+        fi
+
+        echo ""
+        run_install
+
+        # Verify setup completed
+        if [ ! -d ".ai-memory" ]; then
+            echo -e "${RED}❌ Initialization failed or cancelled.${NC}"
+            return 1
+        fi
     fi
 
     if [ "$silent" = false ]; then
@@ -405,11 +480,12 @@ run_save() {
 
     # Calculate tokens saved
     local raw_words=0
-    if command -v rg &>/dev/null; then
-        raw_words=$(rg --files 2>/dev/null | grep -v '\.ai-memory' | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    local file_list
+    file_list=$(list_source_files)
+    if [ -n "$file_list" ]; then
+        raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
     else
-        raw_words=$(find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' \
-          -not -path '*/build/*' -not -path '*/dist/*' 2>/dev/null | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+        raw_words=0
     fi
     [ -z "$raw_words" ] && raw_words=0
 
@@ -427,11 +503,17 @@ run_save() {
     
     # Save the updated statistics back to file
     save_stats "$next_sessions" "$next_saved"
+
+    # Append custom milestone note if provided
+    if [ -n "$message" ]; then
+        echo -e "\n! $message" >> ".ai-memory/state.md"
+    fi
     
     if [ "$silent" = false ]; then
         local cost_saved=$(cost_usd $saved_tokens)
         echo -e "${GREEN}✅ Repository map successfully updated!${NC}"
         echo -e "   📂 Project Map: ${CYAN}.ai-memory/repo-map.txt${NC}"
+        [ -n "$message" ] && echo -e "   📝 Added memory note: ${CYAN}! $message${NC}"
         echo -e "   🧠 Saved ${YELLOW}$(fmt_num $saved_tokens)${NC} tokens (\$${cost_saved} est. savings) in this update!"
     fi
 }
@@ -488,6 +570,121 @@ show_version() {
 }
 
 # ─── RUN (GUI INTERACTIVE ENGINE) ───────────────────────────────────────────
+print_mindmap_frame() {
+    local step=$1  # 1 to 9
+    
+    # Colors
+    local c_ws="${BCYAN}"
+    local c_cr="${MAGENTA}"
+    local c_ms="${YELLOW}"
+    local c_sm="${BGREEN}"
+    
+    # Default paths are DIM/NC
+    local p_col="${DIM}"
+    
+    # Let's define the components based on step
+    local l2_left="│"
+    local l2_right="│"
+    local l11_left="│"
+    local l11_right="│"
+    
+    local l4_c1="└"
+    local l4_h1="───────────────────"
+    local l4_c2="┐"
+    local l4_c3="┌"
+    local l4_h2="───────────────────"
+    local l4_c4="┘"
+    
+    local l10_c1="┌"
+    local l10_h1="───────────────────"
+    local l10_c2="┘"
+    local l10_c3="└"
+    local l10_h2="───────────────────"
+    local l10_c4="┐"
+    
+    local l5_left="│"
+    local l5_right="│"
+    local l9_left="│"
+    local l9_right="│"
+    
+    local l6_left="▼"
+    local l6_right="▼"
+    local l8_left="▲"
+    local l8_right="▲"
+    
+    local core="${BBLUE}[ TOKENSO CORE ]${NC}"
+    
+    # Modify characters based on synapse position (step)
+    local syn="${YELLOW}⚡${p_col}"
+    
+    case $step in
+        1)
+            l2_left="${syn}"
+            l2_right="${syn}"
+            l11_left="${syn}"
+            l11_right="${syn}"
+            ;;
+        2)
+            l4_c1="${syn}"
+            l4_c4="${syn}"
+            l10_c1="${syn}"
+            l10_c4="${syn}"
+            ;;
+        3)
+            # Synapse is in the middle of horizontal line
+            l4_h1="─────────${syn}─────────"
+            l4_h2="─────────${syn}─────────"
+            l10_h1="─────────${syn}─────────"
+            l10_h2="─────────${syn}─────────"
+            ;;
+        4)
+            l4_c2="${syn}"
+            l4_c3="${syn}"
+            l10_c2="${syn}"
+            l10_c3="${syn}"
+            ;;
+        5)
+            l5_left="${syn}"
+            l5_right="${syn}"
+            l9_left="${syn}"
+            l9_right="${syn}"
+            ;;
+        6)
+            l6_left="${syn}"
+            l6_right="${syn}"
+            l8_left="${syn}"
+            l8_right="${syn}"
+            ;;
+        7)
+            # Core flash 1: Green
+            core="${BGREEN}[ TOKENSO CORE ]${NC}"
+            ;;
+        8)
+            # Core flash 2: Cyan
+            core="${BCYAN}[ TOKENSO CORE ]${NC}"
+            ;;
+        9)
+            # Core flash 3: Yellow/Gold
+            core="${YELLOW}[ TOKENSO CORE ]${NC}"
+            ;;
+    esac
+    
+    # Print each line (exactly 13 lines)
+    echo -e "     ${c_ws}[Workspace Code]${NC}                            ${c_cr}[Context Rules]${NC}"
+    echo -e "            ${p_col}${l2_left}${NC}                                           ${p_col}${l2_right}${NC}"
+    echo -e "            ${p_col}▼${NC}                                           ${p_col}▼${NC}"
+    echo -e "            ${p_col}${l4_c1}${l4_h1}${l4_c2}${NC}   ${p_col}${l4_c3}${l4_h2}${l4_c4}${NC}"
+    echo -e "                                 ${p_col}${l5_left}${NC}   ${p_col}${l5_right}${NC}"
+    echo -e "                                 ${p_col}${l6_left}${NC}   ${p_col}${l6_right}${NC}"
+    echo -e "                         ${core}"
+    echo -e "                                 ${p_col}${l8_left}${NC}   ${p_col}${l8_right}${NC}"
+    echo -e "                                 ${p_col}${l9_left}${NC}   ${p_col}${l9_right}${NC}"
+    echo -e "            ${p_col}${l10_c1}${l10_h1}${l10_c2}${NC}   ${p_col}${l10_c3}${l10_h2}${l10_c4}${NC}"
+    echo -e "            ${p_col}▲${NC}                                           ${p_col}▲${NC}"
+    echo -e "            ${p_col}${l11_left}${NC}                                           ${p_col}${l11_right}${NC}"
+    echo -e "     ${c_ms}[Memory State]${NC}                             ${c_sm}[Semantic Map]${NC}"
+}
+
 run_gui() {
     clear
     echo -e "${BBLUE}"
@@ -503,63 +700,32 @@ run_gui() {
     echo -e "  ${BOLD}🔍 Scanning project workspace for AI Mindmap nodes...${NC}"
     sleep 0.4
     
-    local node1="[Workspace Code]"
-    local node2="[Context Rules]"
-    local node3="[Memory State]"
-    local node4="[Semantic Map]"
-    
-    echo -e "    ${GREEN}●${NC} Discovered $node1 ... ${DIM}Logic structures & codebase symbols${NC}"
-    sleep 0.3
-    echo -e "    ${GREEN}●${NC} Discovered $node2 ... ${DIM}Agent constraints & optimization rules${NC}"
-    sleep 0.3
-    echo -e "    ${GREEN}●${NC} Discovered $node3 ... ${DIM}AI milestone journal & state tracker${NC}"
-    sleep 0.3
-    echo -e "    ${GREEN}●${NC} Discovered $node4 ... ${DIM}Optimized folder structures map${NC}"
-    sleep 0.5
+    echo -e "    ${GREEN}●${NC} Discovered [Workspace Code] ... ${DIM}Logic structures & codebase symbols${NC}"
+    sleep 0.2
+    echo -e "    ${GREEN}●${NC} Discovered [Context Rules] ... ${DIM}Agent constraints & optimization rules${NC}"
+    sleep 0.2
+    echo -e "    ${GREEN}●${NC} Discovered [Memory State] ... ${DIM}AI milestone journal & state tracker${NC}"
+    sleep 0.2
+    echo -e "    ${GREEN}●${NC} Discovered [Semantic Map] ... ${DIM}Optimized folder structures map${NC}"
+    sleep 0.2
+    echo -e "    ${GREEN}●${NC} Discovered [Tokenso Core] ... ${DIM}Central token and memory optimization engine${NC}"
+    sleep 0.4
     echo ""
 
     # Step 2: Animating link establishment
-    echo -e "  ${BOLD}⚡ Firing cognitive synapses to connect nodes...${NC}"
+    echo -e "  ${BOLD}⚡ Firing cognitive synapses to connect nodes...${NC}\n"
     sleep 0.4
 
-    # Animation loops for synapses connecting
-    local width=30
-    for ((i=1; i<=width; i++)); do
-        local progress=""
-        for ((j=1; j<=width; j++)); do
-            if [ $j -lt $i ]; then
-                progress="${progress}═"
-            elif [ $j -eq $i ]; then
-                progress="${progress}⚡"
-            else
-                progress="${progress}·"
-            fi
-        done
-        
-        # Output frame
-        printf "\r    ${CYAN}Linking: ${node1} ${progress}> ${node4}${NC}"
-        sleep 0.04
-    done
-    printf "\r    ${GREEN}Linked:  ${node1} ══════════════════════════════> ${node4}  ✔${NC}\n"
+    # Print initial state
+    print_mindmap_frame 1
     sleep 0.2
-
-    for ((i=1; i<=width; i++)); do
-        local progress=""
-        for ((j=1; j<=width; j++)); do
-            if [ $j -lt $i ]; then
-                progress="${progress}═"
-            elif [ $j -eq $i ]; then
-                progress="${progress}⚡"
-            else
-                progress="${progress}·"
-            fi
-        done
-        
-        printf "\r    ${CYAN}Linking: ${node2} ${progress}> ${node3}${NC}"
-        sleep 0.04
+    
+    # 6 frames of travel + 3 frames of flashing core
+    for step in {2..9}; do
+        printf "\033[13A" # Move up 13 lines to overwrite
+        print_mindmap_frame $step
+        sleep 0.15
     done
-    printf "\r    ${GREEN}Linked:  ${node2} ══════════════════════════════> ${node3}  ✔${NC}\n"
-    sleep 0.3
     echo ""
 
     echo -e "  ${BGREEN}✨ Cognitive Mindmap Successfully Integrated!${NC}"
