@@ -1,15 +1,15 @@
 ---
-name: context-optimizer
-description: Use when you want to minimize token waste, intelligently search files without overflowing the context, and refresh memory across agents (Claude Code, Cline, Roo, Antigravity).
+name: tokenso
+description: Use when you want to minimize token waste, intelligently search files without overflowing the context, and refresh memory across agents (Claude Code, Cline, Roo, Antigravity) using Tokenso.
 risk: low
 source: local
 ---
 
-# Context Optimizer & Token Saver
+# Tokenso — Context Optimizer & Token Saver
 
 This skill is designed to prevent context window bloat, eliminate token waste, and stop agents from duplicating efforts or spinning in circles. 
 
-As an AI agent, you must strictly follow these rules when this skill is active or when you are operating in a repository with `.ai-memory` initialized.
+As an AI agent, you must strictly follow these rules when this skill is active or when you are operating in a repository with `.ai-memory` initialized by Tokenso.
 
 ## 1. The Search Diet (Zero-Waste Searching)
 - **Do not read full files blindly**: Before using tools to read an entire file, check its size or use targeted search.
@@ -36,5 +36,5 @@ As an AI agent, you must strictly follow these rules when this skill is active o
 When you update memory or prune context, output a brief summary to the user:
 ```markdown
 > [!TIP]
-> **Context Optimized**: Condensed insights into `.ai-memory/state.md` and pruned immediate context to save tokens.
+> **Tokenso Optimized**: Condensed insights into `.ai-memory/state.md` and pruned immediate context to save tokens.
 ```

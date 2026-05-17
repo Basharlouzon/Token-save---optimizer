@@ -1,10 +1,15 @@
 #!/bin/bash
 # install.sh
-# Installs the Token Save Optimizer CLI globally
+# Installs the Tokenso CLI globally
 
-echo "🚀 Installing Token Save Optimizer CLI..."
+echo "🚀 Installing Tokenso CLI..."
 
 INSTALL_DIR="/usr/local/bin"
+# Detect if $HOME/.local/bin exists and is writable
+if [ -d "$HOME/.local/bin" ] && [ -w "$HOME/.local/bin" ]; then
+    INSTALL_DIR="$HOME/.local/bin"
+fi
+
 CLI_URL="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso"
 
 # Fallback to local testing if running locally
@@ -32,5 +37,7 @@ fi
 echo "✅ Installed successfully!"
 echo ""
 echo "You can now run this command in ANY project:"
-echo -e "\033[0;36m  tokenso install\033[0m"
+echo -e "\033[0;36m  tokenso\033[0m"
+echo "or get started immediately with:"
+echo -e "\033[0;36m  tokenso run\033[0m"
 echo ""

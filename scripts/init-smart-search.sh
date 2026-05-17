@@ -5,7 +5,7 @@
 TARGET_DIR="${1:-.}"
 MEMORY_DIR="$TARGET_DIR/.ai-memory"
 
-echo "Initializing smart search memory in $MEMORY_DIR..."
+echo "Initializing Tokenso smart search memory in $MEMORY_DIR..."
 
 mkdir -p "$MEMORY_DIR"
 
@@ -15,7 +15,7 @@ if [ ! -f "$MEMORY_DIR/state.md" ]; then
 # AI Memory State
 
 ## Completed Tasks
-- [x] Initialized smart search memory
+- [x] Initialized Tokenso smart search memory
 
 ## Next Actions
 - [ ] 
@@ -44,3 +44,8 @@ EST_TOKENS=$(( WORDS * 4 / 3 ))
 
 echo "Done! The repository map is ready at $MEMORY_DIR/repo-map.txt (Estimated tokens: $EST_TOKENS)."
 echo "Agents should read this file instead of manually exploring the workspace."
+
+# Hook to update Tokenso stats silently
+if [ -z "$TOKENSO_INTERNAL" ] && command -v tokenso &>/dev/null; then
+  TOKENSO_INTERNAL=1 tokenso save --silent
+fi

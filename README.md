@@ -1,10 +1,10 @@
-# Token Save Optimizer 🧠🔋
+# Tokenso 🧠🔋
 
 > Stop AI agents from wasting tokens, looping, and reading your entire codebase on every task.
 
 AI coding agents are incredibly powerful, but they often suffer from a critical flaw: **Context Bloat & Token Waste.** When agents explore a large codebase, they read entire files just to find a single line, dump huge search results into memory, and loop over old mistakes — burning tokens and money.
 
-**Token Save Optimizer** is a CLI tool that enforces a "Search Diet" and a "Memory Refresh Protocol" across **15+ AI tools** — from CLI agents to editors to enterprise platforms.
+**Tokenso** is a CLI tool that enforces a "Search Diet" and a "Memory Refresh Protocol" across **15+ AI tools** — from CLI agents to editors to enterprise platforms.
 
 ---
 
@@ -18,9 +18,15 @@ curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer
 
 ---
 
-## 🚀 Usage
+## 🚀 Quick Start
 
-Now in **any project**, just run:
+To run the interactive cognitive mindmap search:
+
+```bash
+tokenso run
+```
+
+Or run the project setup wizard to configure rules for your editors/agents:
 
 ```bash
 tokenso install
@@ -48,7 +54,7 @@ An interactive wizard launches — pick any tools you use:
 ── Enterprise & Cloud ────────────────────────────
 14) GitHub Copilot       (.github/copilot-instructions.md)
 15) Amazon Q Developer   (.amazonq/rules/)
-    0) 🎯 ALL of them
+     0) 🎯 ALL of them
 
   Your selection: 1 9 14
 ```
@@ -57,18 +63,44 @@ Select **multiple tools** with space-separated numbers, or `0` for all.
 
 ---
 
-## 📊 Live Token Dashboard
+## 🧠 Interactive Terminal Mindmap
 
-Just type `tokenso` in any initialized project:
+When you run `tokenso run`, Tokenso visually maps the relationships and files in your workspace, fires "synapses" to link nodes together, prompts to save the optimized map, and launches the live stats dashboard:
 
 ```
-  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
-     ██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
-     ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
-     ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║
-     ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║
-     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝
+  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ 
+  ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║██╔═══██╗
+     ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║██║   ██║
+     ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║
+     ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝
+     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ 
+           Cognitive Mindmap Search  v1.0.0
 
+  🔍 Scanning project workspace for AI Mindmap nodes...
+    ● Discovered [Workspace Code] ... Logic structures & codebase symbols
+    ● Discovered [Context Rules] ... Agent constraints & optimization rules
+    ● Discovered [Memory State] ... AI milestone journal & state tracker
+    ● Discovered [Semantic Map] ... Optimized folder structures map
+
+  ⚡ Firing cognitive synapses to connect nodes...
+    Linked:  [Workspace Code] ══════════════════════════════> [Semantic Map]  ✔
+    Linked:  [Context Rules] ══════════════════════════════> [Memory State]  ✔
+
+  ✨ Cognitive Mindmap Successfully Integrated!
+  Estimated savings vectors initialized at ~85% context compression.
+
+  ┌────────────────────────────────────────────────────────┐
+  │  ❓ Connect nodes and save Tokenso optimized map? [Y/n] │
+  └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 Live Token Dashboard
+
+Just type `tokenso` or `tokenso stats` in any initialized project to see your exact token savings:
+
+```
 📁 Project:  my-awesome-app
 🤖 Active agents: Claude Code  Cursor  GitHub Copilot
 ──────────────────────────────────────────────────────
@@ -90,7 +122,7 @@ Just type `tokenso` in any initialized project:
 
 ## 💡 How It Works
 
-| Without Optimizer | With Optimizer |
+| Without Tokenso | With Tokenso |
 |---|---|
 | AI runs `ls -R` & reads whole files | AI reads a tiny compressed `.ai-memory/repo-map.txt` |
 | AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
@@ -106,6 +138,7 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 | Command | Description |
 |---|---|
 | `tokenso` | Live dashboard with stats |
+| `tokenso run` | Interactive cognitive mindmap search & stats save |
 | `tokenso install` | Interactive project setup wizard |
 | `tokenso stats` | Detailed token report |
 | `tokenso reset` | Clear cumulative stats |
