@@ -29,17 +29,16 @@ done
 
 # ─── Acquire controlling TTY for piped installs (curl | bash). ─────────────
 # curl | bash replaces stdin with the pipe, so interactive `read` prompts hang
-# because they consume curl output instead of keyboard input.  Detect the
-# situation early: if /dev/tty is available we point stdin there; otherwise
-# fall back to unattended mode so the install finishes without blocking.
-if [ ! -t 0 ]; then
-    if [ -e /dev/tty ] && exec < /dev/tty 2>/dev/null; then
-        : # stdin now points at the controlling terminal
-    else
-        echo "  ⚠️  No controlling terminal available — running in unattended mode." >&2
-        UNATTENDED=true
-    fi
+# because they consume curl output instead of keyboard input.
+# Instead of exec-redirecting stdin globally (which is fragile and hangs on
+# some systems), we detect availability of /dev/tty and fall back to
+# unattended mode when it's not reachable.  Interactive prompts read from
+# /dev/tty directly via redirection on each `read` call.
+if [ ! -t 0 ] && [ ! -e /dev/tty ]; then
+    echo "  ⚠️  No controlling terminal available — running in unattended mode." >&2
+    UNATTENDED=true
 fi
+TTY_IN="/dev/tty"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; BGREEN='\033[1;32m'
@@ -288,7 +287,7 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
             echo -e "  ${DIM}Tokenso PATH block already present in $PROFILE — skipped.${NC}" >&2
         fi
     else
-        read -p "  Would you like to automatically append it to your $PROFILE? [Y/n]: " path_choice
+        read -p "  Would you like to automatically append it to your $PROFILE? [Y/n]: " path_choice < "$TTY_IN"
         if [[ ! "$path_choice" =~ ^[Nn]$ ]]; then
             if write_path_block; then
                 echo -e "  ${GREEN}✓ Shell profile ($PROFILE) updated successfully!${NC}" >&2
@@ -325,7 +324,7 @@ if [ "$UNATTENDED" = false ]; then
     # via the absolute path we just wrote — otherwise tell the user how to
     # activate it instead of running a command that will fail.
     if command -v tokenso &>/dev/null || [ -x "$INSTALL_DIR/tokenso" ]; then
-        read -p "  Would you like to configure Tokenso AI memory in the current workspace now? [y/N]: " configure_now
+        read -p "  Would you like to configure Tokenso AI memory in the current workspace now? [y/N]: " configure_now < "$TTY_IN"
         if [[ "$configure_now" =~ ^[yY](es)?$ ]]; then
             echo "" >&2
             "$INSTALL_DIR/tokenso" install
