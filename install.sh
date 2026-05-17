@@ -28,14 +28,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── Acquire controlling TTY for piped installs (curl | bash). ─────────────
-# If /dev/tty isn't usable (CI, certain IDE terminals, headless containers),
-# force unattended mode rather than dying on the redirect or hanging later
-# on a read prompt whose stdin has already been consumed by curl. The
-# subshell probe avoids bash's own "Device not configured" diagnostic
-# leaking to stderr from a direct exec.
+# curl | bash replaces stdin with the pipe, so interactive `read` prompts hang
+# because they consume curl output instead of keyboard input.  Detect the
+# situation early: if /dev/tty is available we point stdin there; otherwise
+# fall back to unattended mode so the install finishes without blocking.
 if [ ! -t 0 ]; then
-    if ( exec < /dev/tty ) 2>/dev/null; then
-        exec < /dev/tty
+    if [ -e /dev/tty ] && exec < /dev/tty 2>/dev/null; then
+        : # stdin now points at the controlling terminal
     else
         echo "  ⚠️  No controlling terminal available — running in unattended mode." >&2
         UNATTENDED=true
