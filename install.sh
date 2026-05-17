@@ -2,8 +2,16 @@
 # install.sh — Global Installer for Tokenso CLI
 # https://github.com/Basharlouzon/Token-save---optimizer
 
-set -o pipefail
-trap 'echo "Tokenso install failed at line $LINENO" >&2' ERR
+set -eo pipefail
+
+# Single source for cleanup + error reporting. Don't replace this trap later.
+# `cleanup` must always exit 0 — a non-zero return from an EXIT trap can
+# re-trigger ERR and print a spurious failure message after a clean run.
+_TMP_CLI=""
+cleanup() { [ -n "$_TMP_CLI" ] && rm -f "$_TMP_CLI"; return 0; }
+on_err() { echo "Tokenso install failed at line $1" >&2; cleanup; exit 1; }
+trap 'on_err $LINENO' ERR
+trap 'cleanup' EXIT
 
 # ─── Argument Parsing ──────────────────────────────────────────────────────
 UNATTENDED=false
@@ -19,9 +27,19 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# ─── Force tty for piped installs ──────────────────────────────────────────
+# ─── Acquire controlling TTY for piped installs (curl | bash). ─────────────
+# If /dev/tty isn't usable (CI, certain IDE terminals, headless containers),
+# force unattended mode rather than dying on the redirect or hanging later
+# on a read prompt whose stdin has already been consumed by curl. The
+# subshell probe avoids bash's own "Device not configured" diagnostic
+# leaking to stderr from a direct exec.
 if [ ! -t 0 ]; then
-  exec < /dev/tty
+    if ( exec < /dev/tty ) 2>/dev/null; then
+        exec < /dev/tty
+    else
+        echo "  ⚠️  No controlling terminal available — running in unattended mode." >&2
+        UNATTENDED=true
+    fi
 fi
 
 # ─── Colors ────────────────────────────────────────────────────────────────
@@ -100,6 +118,11 @@ install_cli_from() {
         return 1
     fi
     if [ ! -w "$INSTALL_DIR" ]; then
+        # Make the sudo prompt obvious — otherwise the user sees the "○" step
+        # spinner above and assumes the script is hung when sudo silently waits
+        # for a password.
+        echo "" >&2
+        echo -e "  ${BOLD}🔐 Your sudo password is required to install to $INSTALL_DIR:${NC}" >&2
         sudo install -m 0755 "$src" "$INSTALL_DIR/tokenso"
     else
         install -m 0755 "$src" "$INSTALL_DIR/tokenso"
@@ -107,19 +130,18 @@ install_cli_from() {
 }
 
 if [ -f "bin/tokenso" ]; then
-    install_cli_from "bin/tokenso" || exit 1
+    install_cli_from "bin/tokenso"
     step_done "Copied Tokenso executable from local source successfully!"
 else
-    if [ ! -w "$INSTALL_DIR" ] && [ "$UNATTENDED" = false ]; then
-        echo -e "  ${YELLOW}🔑 Sudo privileges required to install to $INSTALL_DIR...${NC}" >&2
-    fi
-    TMP_CLI=$(mktemp -t tokenso.XXXXXX)
-    trap 'rm -f "$TMP_CLI"' EXIT
-    if ! curl -fsSL "$CLI_URL" -o "$TMP_CLI"; then
-        step_failed "Download failed from $CLI_URL"
+    _TMP_CLI=$(mktemp -t tokenso.XXXXXX)
+    # `-fsSL` is silent by design; a missing timeout means an unhealthy CDN or
+    # slow link can hang for minutes with zero output, which looks like the
+    # script is dead. Bound it.
+    if ! curl -fsSL --connect-timeout 10 --max-time 120 "$CLI_URL" -o "$_TMP_CLI"; then
+        step_failed "Download failed from $CLI_URL (connect or transfer timed out)"
         exit 1
     fi
-    install_cli_from "$TMP_CLI" || exit 1
+    install_cli_from "$_TMP_CLI"
     step_done "Downloaded & installed Tokenso CLI globally successfully!"
 fi
 
