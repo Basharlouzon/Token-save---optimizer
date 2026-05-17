@@ -6,6 +6,7 @@
 ./.ai-memory/scripts/init-smart-search.sh
 ./.ai-memory/repo-map.txt
 ./README.md
+./.gitignore
 ./scripts/init-smart-search.sh
 ./scripts/apply-cross-rules.sh
 ./SKILL.md

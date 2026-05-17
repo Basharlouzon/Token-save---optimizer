@@ -13,20 +13,20 @@
     <script>
     window.TOKENSO_DATA = {
         projectName: "claudememory",
-        dateExported: "2026-05-17 15:43",
-        activeAgents: "Gemini CLI / Antigravity Antigravity ✓ global",
+        dateExported: "2026-05-17 16:08",
+        activeAgents: "Kilo Gemini CLI / Antigravity Antigravity ✓ global",
         filesCount: 8,
-        rawTokens: 18353,
-        mapTokens: 16,
-        savedTokens: 18337,
+        rawTokens: 18970,
+        mapTokens: 19,
+        savedTokens: 18951,
         pct: 99,
-        compRatio: "1147.0",
-        costSaved: "0.0550",
-        sessions: 29,
-        cumulativeSaved: 274067,
-        costCum: "0.8222",
-        history: [7000,8200,8988,8988,9135,9135,17521,17521,18337,18337],
-        milestones: ["Refactored context states", "Test run to record history", "Added new documentation", "Changed logic", "Fixed warning", "Cleaned imports", "Optimized UI", "Polished interactive note prompt"]
+        compRatio: "998.4",
+        costSaved: "0.0568",
+        sessions: 3,
+        cumulativeSaved: 56853,
+        costCum: "0.1705",
+        history: [18951,18951,18951],
+        milestones: ["test"]
     };
     </script>
     <style>
@@ -683,20 +683,20 @@
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
                         <div class="model-select-grid">
                             <button class="model-btn active" data-model="sonnet">
-                                <h4>Claude 3.5 Sonnet</h4>
+                                <h4>Claude Sonnet 4</h4>
                                 <p>$3.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="opus">
-                                <h4>Claude 3.0 Opus</h4>
+                                <h4>Claude Opus 4</h4>
                                 <p>$15.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="gemini">
-                                <h4>Gemini 1.5 Pro</h4>
+                                <h4>Gemini 2.5 Pro</h4>
                                 <p>$1.25/1M</p>
                             </button>
                             <button class="model-btn" data-model="gpt4o">
-                                <h4>GPT-4o</h4>
-                                <p>$2.50/1M</p>
+                                <h4>GPT-4.1</h4>
+                                <p>$2.00/1M</p>
                             </button>
                         </div>
                     </div>
@@ -739,7 +739,7 @@
         
         <!-- Footer -->
         <footer>
-            <p>Tokenso Context Optimizer CLI v2.1.0 — Powered by Bash & Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank">GitHub</a>.</p>
+            <p>Tokenso Context Optimizer CLI v2.2.0 — Powered by Bash & Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank">GitHub</a>.</p>
         </footer>
     </div>
     
@@ -844,10 +844,10 @@
         
         // ROI Simulator engine
         const models = {
-            sonnet: { name: 'Claude 3.5 Sonnet', rate: 3.00 },
-            opus: { name: 'Claude 3.0 Opus', rate: 15.00 },
-            gemini: { name: 'Gemini 1.5 Pro', rate: 1.25 },
-            gpt4o: { name: 'GPT-4o', rate: 2.50 }
+            sonnet: { name: 'Claude Sonnet 4', rate: 3.00 },
+            opus: { name: 'Claude Opus 4', rate: 15.00 },
+            gemini: { name: 'Gemini 2.5 Pro', rate: 1.25 },
+            gpt4o: { name: 'GPT-4.1', rate: 2.00 }
         };
         let selectedModel = 'sonnet';
         
