@@ -12,6 +12,22 @@ Every session, Tokenso tracks exactly how many tokens and dollars you saved — 
 
 ---
 
+## ✨ What's new in 2.2.0
+
+A production-hardening release. Everything you ran before still works the same way — it just fails less.
+
+- **Idempotent installer.** Re-running `install.sh` no longer duplicates PATH or completion blocks in your shell profile; appended lines are now bracketed with `# >>> tokenso path >>>` markers and skipped on subsequent runs.
+- **Safer downloads.** The remote installer now downloads to a temp file, verifies size and shebang, and installs atomically with `install(1)`. A failed `curl` no longer leaves a half-written binary on PATH.
+- **Robust stats parsing.** `bin/tokenso` prefers `jq` for `.ai-memory/optimizer-stats.json` and falls back to grep/awk with integer validation. Corrupt JSON now recovers to defaults with a warning instead of crashing.
+- **Optional dependencies.** Missing `bc`, `jq`, `rg`, or `tree`? Tokenso degrades gracefully — `bc` falls back to `awk` for cost math, `rg` falls back to `find`, and so on. See [Troubleshooting](#-troubleshooting) for the full table.
+- **Offline-friendly dashboard.** The HTML export now ships with a `ui-sans-serif`/`ui-monospace` system-font fallback and renders fully without network. Charts are memoized, resize is debounced, and chart points support keyboard focus and touch alongside hover.
+- **Accessibility.** ARIA labels on gauge/milestones/chart points, units on ROI sliders ("15 runs/day", "5,000 tokens/run"), and a dashed accent line on the savings chart so colorblind users can still distinguish the trend.
+- **Bash safety.** `set -o pipefail` + `ERR` traps in the installer, `set -euo pipefail` in helper scripts, unified `rg`/`find` exclusion lists so the two code paths cannot drift.
+
+Upgrade with `tokenso update` or re-run the install one-liner below — the new installer is idempotent.
+
+---
+
 ## ⚡ Install
 
 Run **once** on your machine to install the `tokenso` command globally:
