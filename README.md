@@ -26,6 +26,8 @@ For CI or unattended setups (no interactive prompts):
 curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash -s -- -y
 ```
 
+> The installer probes for a usable controlling terminal and **auto-switches to unattended mode** if it can't find one — so the `curl | bash` one-liner also works cleanly inside VS Code's integrated terminal, GitHub Codespaces, headless containers, and other contexts where `/dev/tty` isn't available. The inner `bin/tokenso` download is timeout-bounded; no more silent multi-minute hangs on a slow CDN.
+
 ---
 
 ## 🚀 Quick Start
@@ -293,6 +295,14 @@ To fully uninstall:
 rm -f "$(command -v tokenso)" "$HOME/.tokenso_completion.sh"
 # Remove the marker-bracketed blocks from your shell profile (~/.zshrc, ~/.bashrc, etc.)
 ```
+
+### Installer looks stuck
+
+If the installer appears frozen at `○ Copying Tokenso executable to target...`:
+
+- **Most common cause:** `sudo` is silently waiting for your password. The installer now prints `🔐 Your sudo password is required next:` immediately before the prompt — if you see that line, type your password (it won't echo).
+- **Slow network:** The inner `bin/tokenso` download has a 10-second connect timeout and 120-second total timeout. If you're behind a proxy, set `HTTPS_PROXY` and re-run.
+- **No TTY (CI / IDE terminals):** The installer auto-detects this and switches to unattended mode with a clear warning. If you still want unattended mode explicitly, pass `-y`.
 
 ### Corrupt or stale stats
 
