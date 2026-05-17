@@ -52,6 +52,21 @@ echo ""
 echo "  AI Coding Agents:"
 inject_rules ".claudecode"              "Claude Code"
 inject_rules "CLAUDE.md"                "Claude Code (CLAUDE.md)"
+if [ ! -f "$TARGET_DIR/.claude/skills/brainstorming/SKILL.md" ]; then
+    mkdir -p "$TARGET_DIR/.claude/skills/brainstorming"
+    _BSRC=""
+    [ -f "skills/brainstorming/SKILL.md" ] && _BSRC="skills/brainstorming/SKILL.md"
+    [ -f ".claude/skills/brainstorming/SKILL.md" ] && _BSRC=".claude/skills/brainstorming/SKILL.md"
+    if [ -n "$_BSRC" ]; then
+        cp "$_BSRC" "$TARGET_DIR/.claude/skills/brainstorming/SKILL.md"
+    else
+        curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/.claude/skills/brainstorming/SKILL.md" \
+             -o "$TARGET_DIR/.claude/skills/brainstorming/SKILL.md" 2>/dev/null || true
+    fi
+    if [ -f "$TARGET_DIR/.claude/skills/brainstorming/SKILL.md" ]; then
+        echo "  ✅ Installed brainstorming skill → .claude/skills/brainstorming/SKILL.md"
+    fi
+fi
 inject_rules ".clinerules"              "Cline"
 inject_rules ".roomodes"                "Roo Code"
 inject_rules ".kilorules"               "Kilo"

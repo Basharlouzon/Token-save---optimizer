@@ -1,4 +1,4 @@
-x# AI Memory State
+# AI Memory State
 
 ## Completed Tasks
 - [x] Initialized Tokenso smart search memory

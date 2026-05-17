@@ -241,6 +241,7 @@ Shows a syntax-highlighted directory tree with file/folder counts and estimated 
 | `tokenso reset` | Clear cumulative stats history |
 | `tokenso update` | Self-update from GitHub |
 | `tokenso --version` | Show version |
+| `tokenso --quiet <cmd>` | Suppress all output (CI / hooks) |
 
 ---
 
@@ -320,7 +321,14 @@ tokenso reset
 
 | Tool | Config File(s) |
 |---|---|
-| Claude Code | `.claudecode` + `CLAUDE.md` |
+| Claude Code | `.claudecode` + `CLAUDE.md` + brainstorming skill |
+| Cline | `.clinerules` |
+| Roo Code | `.roomodes` |
+| Kilo | `.kilorules` |
+| Gemini CLI | `.geminirules` |
+| Open Code | `.opencode` |
+| Aider | `CONVENTIONS.md` + `.aider.conf.yml` |
+| Continue.dev | `.continue/config.yaml` |
 
 #### Claude Code Skills
 
@@ -329,13 +337,6 @@ tokenso reset
 | Brainstorming | `.claude/skills/brainstorming/SKILL.md` | Design-first workflow — enforces spec approval before any implementation |
 
 > The **brainstorming skill** ships automatically when you select Claude Code during `tokenso install`. It prevents agents from jumping straight to code by requiring an approved design spec first.
-| Cline | `.clinerules` |
-| Roo Code | `.roomodes` |
-| Kilo | `.kilorules` |
-| Gemini CLI | `.geminirules` |
-| Open Code | `.opencode` |
-| Aider | `CONVENTIONS.md` + `.aider.conf.yml` |
-| Continue.dev | `.continue/config.yaml` |
 
 ### ⭐ Antigravity (Google DeepMind)
 
@@ -368,6 +369,8 @@ tokenso reset
 ## 🤝 Contributing
 
 PRs and issues are welcome at [github.com/Basharlouzon/Token-save---optimizer](https://github.com/Basharlouzon/Token-save---optimizer).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR guidelines. Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

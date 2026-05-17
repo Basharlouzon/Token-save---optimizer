@@ -1,2 +1,9 @@
 .ai-memory/
 tokenso-dashboard.html
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

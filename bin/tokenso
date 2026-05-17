@@ -1,6 +1,10 @@
 #!/bin/bash
 # tokenso CLI — Enhanced Edition
 # https://github.com/Basharlouzon/Token-save---optimizer
+#
+# shellcheck disable=SC2155
+# shellcheck disable=SC2086
+# shellcheck disable=SC2034
 
 # Safer pipelines without breaking the many `|| true` fallbacks used below.
 set -o pipefail
@@ -482,6 +486,28 @@ RULES_EOF
             1)
                 inject_rules ".claudecode" "Claude Code"
                 inject_rules "CLAUDE.md"   "Claude Code (CLAUDE.md)"
+                mkdir -p .claude/skills/brainstorming
+                if [ -f ".claude/skills/brainstorming/SKILL.md" ]; then
+                    echo -e "  ⚡ ${YELLOW}Claude Code (brainstorming skill)${NC} already configured."
+                else
+                    _BRAINSTALKI_SRC=""
+                    if [ -f ".claude/skills/brainstorming/SKILL.md" ]; then
+                        _BRAINSTALKI_SRC=".claude/skills/brainstorming/SKILL.md"
+                    elif [ -f "skills/brainstorming/SKILL.md" ]; then
+                        _BRAINSTALKI_SRC="skills/brainstorming/SKILL.md"
+                    fi
+                    if [ -n "$_BRAINSTALKI_SRC" ]; then
+                        cp "$_BRAINSTALKI_SRC" .claude/skills/brainstorming/SKILL.md
+                    else
+                        curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/.claude/skills/brainstorming/SKILL.md" \
+                             -o .claude/skills/brainstorming/SKILL.md 2>/dev/null || true
+                    fi
+                    if [ -f ".claude/skills/brainstorming/SKILL.md" ]; then
+                        echo -e "  ✅ Installed ${GREEN}brainstorming skill${NC} → .claude/skills/brainstorming/SKILL.md"
+                    else
+                        echo -e "  ${YELLOW}⚠ Could not install brainstorming skill (download failed).${NC}"
+                    fi
+                fi
                 ;;
             2)  inject_rules ".clinerules"  "Cline" ;;
             3)  inject_rules ".roomodes"    "Roo Code" ;;
@@ -574,11 +600,17 @@ EOF
 # ─── SAVE & UPDATE ──────────────────────────────────────────────────────────
 run_save() {
     local silent=false
+    local quiet=false
     local message=""
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --silent|-s)
+                silent=true
+                shift
+                ;;
+            --quiet|-q)
+                quiet=true
                 silent=true
                 shift
                 ;;
@@ -596,6 +628,10 @@ run_save() {
                 ;;
         esac
     done
+    
+    if [ "$quiet" = true ]; then
+        exec 3>/dev/null 1>&3 2>&3
+    fi
 
     if [ ! -d ".ai-memory" ]; then
         if [ "$silent" = true ]; then
@@ -2398,13 +2434,21 @@ run_gui() {
 }
 
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
+_QUIET=false
+if [[ "$1" == "--quiet" || "$1" == "-q" ]]; then
+    _QUIET=true
+    shift
+fi
+
 case "$1" in
     run)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_gui "$@"
         ;;
     install)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_install "$@"
         ;;
     save)
@@ -2413,22 +2457,27 @@ case "$1" in
         ;;
     search)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_search "$@"
         ;;
     stats)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_stats "$@"
         ;;
     state)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_state "$@"
         ;;
     map)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_map "$@"
         ;;
     clean)
         shift
+        if [ "$_QUIET" = true ]; then exec 3>/dev/null 1>&3 2>&3; fi
         run_clean "$@"
         ;;
     reset)            run_reset ;;
