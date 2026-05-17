@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.2.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.3.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,19 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.3.0
+
+A reliability and diagnostics release.
+
+- **`tokenso doctor`** — New diagnostics command that checks dependencies, project state, JSON health, and active tool configs with pass/warn/fail output.
+- **`tokenso status`** — Quick one-line project health check (sessions, tokens saved, agents, map size).
+- **No more hanging.** Replaced all fragile `exec < /dev/tty` redirects with per-prompt `< /dev/tty` reads throughout `tokenso install`, `tokenso save`, and `tokenso state`.
+- **Smarter self-update.** `tokenso update` now fetches the remote version first and skips the download if already current.
+- **Graceful search without perl.** Search highlighting falls back to `sed` when `perl` isn't installed.
+- **Enhanced state.md template.** New installs include `## Blocked` and `## Decisions` sections for richer AI memory tracking.
+- **Temp file cleanup.** An EXIT trap now removes `.ai-memory/temp_search_matches.txt` on every run.
+- **Fixed timing.** Search elapsed-time display no longer shows wrong values when `date +%s` isn't available.
 
 ## ✨ What's new in 2.2.0
 
@@ -256,6 +269,8 @@ Shows a syntax-highlighted directory tree with file/folder counts and estimated 
 | `tokenso clean` | Wipe cached optimizer files for this project |
 | `tokenso reset` | Clear cumulative stats history |
 | `tokenso update` | Self-update from GitHub |
+| `tokenso doctor` | Run environment diagnostics |
+| `tokenso status` | Quick one-line project health check |
 | `tokenso --version` | Show version |
 
 ---

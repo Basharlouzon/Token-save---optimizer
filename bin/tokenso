@@ -5,7 +5,13 @@
 # Safer pipelines without breaking the many `|| true` fallbacks used below.
 set -o pipefail
 
-VERSION="2.2.0"
+_cleanup() {
+    rm -f ".ai-memory/temp_search_matches.txt" 2>/dev/null
+    return 0
+}
+trap _cleanup EXIT
+
+VERSION="2.3.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -389,6 +395,8 @@ _show_commands() {
     echo -e "  ${CYAN}clean${NC}     Safely wipe Tokenso cache for this project"
     echo -e "  ${CYAN}reset${NC}     Clear cumulative stats history"
     echo -e "  ${CYAN}update${NC}    Pull latest version from GitHub"
+    echo -e "  ${CYAN}doctor${NC}    Run environment diagnostics"
+    echo -e "  ${CYAN}status${NC}    Quick one-line project health check"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -451,8 +459,7 @@ RULES_EOF
         echo -e "  15) Amazon Q Developer   (.amazonq/rules/)"
         echo -e "  ${YELLOW}   0) 🎯 ALL of them${NC}\n"
 
-        [ -t 0 ] || exec < /dev/tty
-        read -p "  Your selection: " selections
+        read -p "  Your selection: " selections < "${TTY_IN:-/dev/tty}"
     else
         echo -e "  ⚡ Running non-interactive setup with selections: ${CYAN}$selections${NC}"
     fi
@@ -603,8 +610,8 @@ run_save() {
         fi
 
         echo -e "${YELLOW}⚠️  .ai-memory is not initialized in this project.${NC}"
-        [ -t 0 ] || exec < /dev/tty
-        read -p "  Would you like to initialize it now? [Y/n]: " init_choice
+        [ -t 0 ] || TTY_IN="/dev/tty"
+        read -p "  Would you like to initialize it now? [Y/n]: " init_choice < "${TTY_IN:-/dev/tty}"
         if [[ "$init_choice" =~ ^[Nn]$ ]]; then
             echo -e "  ${RED}Aborting. Save requires initialization.${NC}"
             return 1
@@ -669,7 +676,7 @@ run_save() {
         echo -e "  ${YELLOW}💡 Interactive Milestone Note${NC}"
         echo -e "     Add a brief description of the current milestone/changes to log in state.md"
         echo -e "     (e.g., 'Implemented auth flow' or press Enter to skip):"
-        read -p "     📝 Note: " message
+        read -p "     📝 Note: " message < "${TTY_IN:-/dev/tty}"
         message=$(echo "$message" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     fi
 
@@ -683,6 +690,25 @@ run_save() {
         echo -e "   📂 Project Map: ${CYAN}.ai-memory/repo-map.txt${NC}"
         [ -n "$message" ] && echo -e "   📝 Added memory note: ${CYAN}! $message${NC}"
         echo -e "   🧠 Saved ${YELLOW}$(fmt_num $saved_tokens)${NC} tokens (\$${cost_saved} est. savings) in this update!"
+    fi
+}
+
+_highlight() {
+    local text=$1 query=$2
+    if command -v perl &>/dev/null; then
+        echo "$text" | perl -pe "s/(\Q$query\E)/${YELLOW}\$1${NC}/gi"
+    else
+        local lc_query=$(echo "$query" | tr '[:upper:]' '[:lower:]')
+        echo "$text" | sed -E "s/($(echo "$query" | sed 's/[.[\*^$()+?{|\\]/\\&/g'))/${YELLOW}&${NC}/gI" 2>/dev/null || echo "$text"
+    fi
+}
+
+_highlight_dim() {
+    local text=$1 query=$2
+    if command -v perl &>/dev/null; then
+        echo "$text" | perl -pe "s/(\Q$query\E)/${YELLOW}\$1${NC}${DIM}/gi"
+    else
+        echo "$text"
     fi
 }
 
@@ -714,7 +740,7 @@ run_search() {
             while IFS= read -r line; do
                 local trimmed=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
                 if [ -n "$trimmed" ]; then
-                    local highlighted=$(echo "$trimmed" | perl -pe "s/(\Q$query\E)/${YELLOW}\$1${NC}/gi")
+                    local highlighted=$(_highlight "$trimmed" "$query")
                     echo -e "    ${CYAN}•${NC} ${highlighted}"
                 fi
             done <<< "$map_matches"
@@ -738,7 +764,7 @@ run_search() {
     local match_count=0
     local searched_files=0
     local max_matches=15
-    local start_time=$(date +%s 2>/dev/null || date +%S)
+    local start_time=$(date +%s 2>/dev/null || echo 0)
 
     local temp_matches=".ai-memory/temp_search_matches.txt"
     touch "$temp_matches"
@@ -766,7 +792,7 @@ run_search() {
             local content="${BASH_REMATCH[3]}"
             
             content=$(echo "$content" | sed -e 's/^[[:space:]]*//')
-            local highlighted_content=$(echo "$content" | perl -pe "s/(\Q$query\E)/${YELLOW}\$1${NC}${DIM}/gi")
+            local highlighted_content=$(_highlight_dim "$content" "$query")
             
             if [ "$file" != "$last_file" ]; then
                 [ -n "$last_file" ] && echo ""
@@ -782,7 +808,7 @@ run_search() {
 
     rm -f "$temp_matches"
 
-    local end_time=$(date +%s 2>/dev/null || date +%S)
+    local end_time=$(date +%s 2>/dev/null || echo 0)
     local elapsed=$(( end_time - start_time ))
     [ $elapsed -lt 0 ] && elapsed=0
 
@@ -2027,6 +2053,12 @@ run_state() {
 - [ ] Explore codebase modules
 - [ ] Set up project specific rules
 
+## Blocked
+- (Add blockers here to track dependencies)
+
+## Decisions
+- (Log architectural decisions here to avoid re-litigating)
+
 ## Key Context & Architecture
 - (Add crucial project facts here to avoid re-reading files)
 EOF
@@ -2073,17 +2105,16 @@ EOF
     echo ""
 
     if [ -t 0 ]; then
-        read -p "  Would you like to edit your AI memory state file? [y/N]: " edit_choice
+        read -p "  Would you like to edit your AI memory state file? [y/N]: " edit_choice < "${TTY_IN:-/dev/tty}"
         if [[ "$edit_choice" =~ ^[yY](es)?$ ]]; then
-            local editor="nano"
-            if [ -n "$EDITOR" ]; then
-                editor="$EDITOR"
-            elif command -v nano &>/dev/null; then
-                editor="nano"
-            elif command -v vim &>/dev/null; then
-                editor="vim"
-            elif command -v vi &>/dev/null; then
-                editor="vi"
+            local editor="${EDITOR:-vi}"
+            if ! command -v "$editor" &>/dev/null; then
+                for candidate in nano vim vi; do
+                    if command -v "$candidate" &>/dev/null; then
+                        editor="$candidate"
+                        break
+                    fi
+                done
             fi
             
             echo -e "  ${CYAN}Launching $editor for $state_file...${NC}"
@@ -2204,13 +2235,26 @@ EOF
 
 # ─── UPDATE ─────────────────────────────────────────────────────────────────
 run_update() {
-    echo -e "${BLUE}Pulling latest version from GitHub...${NC}"
+    echo -e "${BLUE}⬇  Checking for updates...${NC}"
     local cmd_path=$(which tokenso 2>/dev/null)
     if [ -z "$cmd_path" ]; then
         echo -e "${RED}❌ Global 'tokenso' command not found in PATH.${NC}"
         echo -e "   Please run ${CYAN}bash install.sh${NC} to install or reinstall it."
         return 1
     fi
+
+    local remote_version
+    remote_version=$(curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" 2>/dev/null \
+        | grep -m1 '^VERSION=' | cut -d'"' -f2)
+
+    if [ -n "$remote_version" ]; then
+        echo -e "  Current: ${DIM}v$VERSION${NC}  →  Remote: ${BGREEN}v$remote_version${NC}"
+        if [ "$remote_version" = "$VERSION" ]; then
+            echo -e "  ${GREEN}✓ Already on the latest version.${NC}"
+            return 0
+        fi
+    fi
+
     local install_dir=$(dirname "$cmd_path")
     if [ -w "$install_dir" ] && [ -w "$cmd_path" ]; then
         curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" -o "$cmd_path"
@@ -2397,6 +2441,113 @@ run_gui() {
     fi
 }
 
+# ─── DOCTOR (Diagnostics) ──────────────────────────────────────────────────
+run_doctor() {
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🩺 Tokenso Doctor — Environment Diagnostics${NC}"
+    echo -e "${BCYAN}======================================================${NC}\n"
+
+    local pass=0 fail=0 warn_count=0
+
+    _check() {
+        local label=$1 result=$2
+        if [ "$result" = "ok" ]; then
+            echo -e "  ${GREEN}✓${NC}  $label"
+            pass=$((pass + 1))
+        elif [ "$result" = "warn" ]; then
+            echo -e "  ${YELLOW}⚠${NC}  $label"
+            warn_count=$((warn_count + 1))
+        else
+            echo -e "  ${RED}✗${NC}  $label"
+            fail=$((fail + 1))
+        fi
+    }
+
+    _check "Tokenso CLI: v$VERSION" "ok"
+
+    if command -v tokenso &>/dev/null; then
+        _check "Global command: $(which tokenso)" "ok"
+    else
+        _check "Global command: not found in PATH" "fail"
+    fi
+
+    _check "jq: $(command -v jq &>/dev/null && echo 'available' || echo 'missing (grep/awk fallback active)')" \
+        "$(command -v jq &>/dev/null && echo ok || echo warn)"
+    _check "rg (ripgrep): $(command -v rg &>/dev/null && echo 'available' || echo 'missing (find/grep fallback active)')" \
+        "$(command -v rg &>/dev/null && echo ok || echo warn)"
+    _check "bc: $(command -v bc &>/dev/null && echo 'available' || echo 'missing (awk fallback active)')" \
+        "$(command -v bc &>/dev/null && echo ok || echo warn)"
+    _check "tree: $(command -v tree &>/dev/null && echo 'available' || echo 'missing (find fallback active)')" \
+        "$(command -v tree &>/dev/null && echo ok || echo warn)"
+    _check "perl: $(command -v perl &>/dev/null && echo 'available' || echo 'missing (sed fallback active)')" \
+        "$(command -v perl &>/dev/null && echo ok || echo warn)"
+
+    echo ""
+    echo -e "  ${BOLD}── Project State ────────────────────────────────────${NC}"
+
+    if [ -d ".ai-memory" ]; then
+        _check ".ai-memory/ directory exists" "ok"
+    else
+        _check ".ai-memory/ not initialized (run 'tokenso install')" "fail"
+    fi
+
+    if [ -f ".ai-memory/optimizer-stats.json" ]; then
+        local schema_ok=true
+        if command -v jq &>/dev/null; then
+            jq . ".ai-memory/optimizer-stats.json" &>/dev/null || schema_ok=false
+        fi
+        if $schema_ok; then
+            _check "optimizer-stats.json: valid" "ok"
+        else
+            _check "optimizer-stats.json: corrupt JSON (run 'tokenso reset')" "fail"
+        fi
+    else
+        _check "optimizer-stats.json: not found" "warn"
+    fi
+
+    [ -f ".ai-memory/repo-map.txt" ] && _check "repo-map.txt: exists ($(wc -l < .ai-memory/repo-map.txt | tr -d ' ') lines)" "ok" \
+                                       || _check "repo-map.txt: not found (run 'tokenso save')" "warn"
+    [ -f ".ai-memory/state.md" ] && _check "state.md: exists" "ok" \
+                                   || _check "state.md: not found" "warn"
+    [ -f ".ai-memory/scripts/init-smart-search.sh" ] && _check "init-smart-search.sh: present" "ok" \
+                                                       || _check "init-smart-search.sh: missing" "warn"
+
+    echo ""
+    echo -e "  ${BOLD}── Active Tool Configs ──────────────────────────────${NC}"
+    local tools
+    tools=$(detect_tools)
+    if [ -n "$tools" ]; then
+        echo -e "  ${GREEN}✓${NC}  ${tools}"
+        pass=$((pass + 1))
+    else
+        _check "No AI tool configs detected (run 'tokenso install')" "warn"
+    fi
+
+    echo ""
+    echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+    echo -e "  ${GREEN}$pass passed${NC}  ${YELLOW}$warn_count warnings${NC}  ${RED}$fail failed${NC}"
+    echo ""
+}
+
+# ─── STATUS (Quick Health) ─────────────────────────────────────────────────
+run_status() {
+    if [ ! -d ".ai-memory" ]; then
+        echo -e "${YELLOW}⚠  Tokenso not initialized.${NC}  Run ${CYAN}tokenso install${NC}"
+        return 1
+    fi
+    load_or_init_stats
+    local project=$(basename "$(pwd)")
+    local map_lines=0
+    [ -f ".ai-memory/repo-map.txt" ] && map_lines=$(wc -l < ".ai-memory/repo-map.txt" | tr -d ' ')
+    local state_items=0
+    [ -f ".ai-memory/state.md" ] && state_items=$(grep -c "^\- \[" ".ai-memory/state.md" 2>/dev/null || echo 0)
+    local tools=$(detect_tools)
+    local tool_count=0
+    [ -n "$tools" ] && tool_count=$(echo "$tools" | wc -w | tr -d ' ')
+
+    echo -e "${BOLD}$project${NC}  ${DIM}v$VERSION  •  $SESSIONS sessions  •  $(fmt_num $CUMULATIVE_SAVED) tokens saved  •  $map_lines map lines  •  $state_items state items  •  $tool_count agents"
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
@@ -2433,6 +2584,8 @@ case "$1" in
         ;;
     reset)            run_reset ;;
     update)           run_update ;;
+    doctor)           run_doctor ;;
+    status)           run_status ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;
     "")               show_dashboard ;;
