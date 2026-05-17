@@ -11,7 +11,7 @@ When agents explore a large codebase, they tend to read entire files just to fin
 The easiest way to install Context Optimizer into your current project is via your terminal. Run the following command at the root of your project:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
 ```
 
 **What this does:**

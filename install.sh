@@ -70,7 +70,7 @@ mkdir -p .ai-memory/scripts
 if [ -f "scripts/init-smart-search.sh" ]; then
     cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
 else
-    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/main/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
+    curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" -o .ai-memory/scripts/init-smart-search.sh
 fi
 chmod +x .ai-memory/scripts/init-smart-search.sh
 
