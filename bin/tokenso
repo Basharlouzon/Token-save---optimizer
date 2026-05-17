@@ -2,7 +2,7 @@
 # tokenso CLI — Enhanced Edition
 # https://github.com/Basharlouzon/Token-save---optimizer
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; BGREEN='\033[1;32m'
@@ -14,7 +14,7 @@ MAGENTA='\033[0;35m'
 BOLD='\033[1m'; DIM='\033[2m'
 NC='\033[0m'
 
-# ─── Cost per 1M tokens (USD) — update as needed ───────────────────────────
+# ─── Cost per 1M tokens (USD) ──────────────────────────────────────────────
 COST_PER_1M=3.00   # Claude Sonnet baseline
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
@@ -67,7 +67,6 @@ detect_tools() {
 }
 
 list_source_files() {
-    # Exclude .ai-memory, .git, node_modules, build, dist, and common binary/lock extensions
     local exclude_pattern='\.(png|jpg|jpeg|gif|ico|pdf|zip|gz|tar|mp4|mp3|woff|woff2|ttf|eot|map|lock|db|exe|dll|so|dylib|class|jar|apk|ipa|bundle)$'
     if command -v rg &>/dev/null; then
         rg --files 2>/dev/null | grep -v '\.ai-memory' | grep -v '\.git' | grep -Ev "$exclude_pattern"
@@ -85,23 +84,96 @@ load_or_init_stats() {
         # Fallbacks in case of empty values
         [ -z "$SESSIONS" ] && SESSIONS=0
         [ -z "$CUMULATIVE_SAVED" ] && CUMULATIVE_SAVED=0
+        
+        # Load history array
+        local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' "$STATS_FILE" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
+        if [ -n "$raw_hist" ]; then
+            IFS=',' read -r -a HISTORY_ARR <<< "$raw_hist"
+        else
+            HISTORY_ARR=()
+        fi
     else
-        SESSIONS=0; CUMULATIVE_SAVED=0; INSTALL_DATE=$(date +"%Y-%m-%d")
+        SESSIONS=0; CUMULATIVE_SAVED=0; INSTALL_DATE=$(date +"%Y-%m-%d"); HISTORY_ARR=()
     fi
 }
 
 save_stats() {
     local sessions_to_save=$1
     local saved_to_save=$2
+    local new_saved=$3
+    
+    # Load history
+    local raw_hist=$(grep -o '"history"[ :]*\[[^]]*\]' ".ai-memory/optimizer-stats.json" 2>/dev/null | cut -d'[' -f2 | tr -d ']' | tr -d ' ' | tr -d '\n' || echo "")
+    local hist_arr=()
+    if [ -n "$raw_hist" ]; then
+        IFS=',' read -r -a hist_arr <<< "$raw_hist"
+    fi
+    
+    # Append newest record
+    hist_arr+=("$new_saved")
+    
+    # Restrict to last 10 entries
+    local len=${#hist_arr[@]}
+    if [ $len -gt 10 ]; then
+        hist_arr=("${hist_arr[@]:$((len - 10))}")
+    fi
+    
+    # Build history array string
+    local hist_json="["
+    for ((i=0; i<${#hist_arr[@]}; i++)); do
+        hist_json="${hist_json}${hist_arr[$i]}"
+        if [ $i -lt $(( ${#hist_arr[@]} - 1 )) ]; then
+            hist_json="${hist_json}, "
+        fi
+    done
+    hist_json="${hist_json}]"
+
     cat > ".ai-memory/optimizer-stats.json" << EOF
 {
   "version": "$VERSION",
   "installed": "$INSTALL_DATE",
   "sessions": $sessions_to_save,
   "cumulative_saved": $saved_to_save,
-  "last_run": "$(date +"%Y-%m-%d %H:%M")"
+  "last_run": "$(date +"%Y-%m-%d %H:%M")",
+  "history": $hist_json
 }
 EOF
+}
+
+# ─── Sparklines Trend Generator ────────────────────────────────────────────
+draw_sparkline() {
+    local history=("$@")
+    if [ ${#history[@]} -eq 0 ]; then
+        echo -ne "${DIM}No historical stats${NC}"
+        return
+    fi
+
+    local min=${history[0]}
+    local max=${history[0]}
+    for val in "${history[@]}"; do
+        [ "$val" -lt "$min" ] && min=$val
+        [ "$val" -gt "$max" ] && max=$val
+    done
+
+    local range=$(( max - min ))
+    local chars=(" " "▂" "▃" "▄" "▅" "▆" "▇" "█")
+    local spark=""
+    
+    for val in "${history[@]}"; do
+        if [ $range -eq 0 ]; then
+            spark="${spark}${GREEN}▅${NC}"
+        else
+            local scale=$(( (val - min) * 7 / range ))
+            local color="${GREEN}"
+            if [ $scale -lt 2 ]; then
+                color="${DIM}${GREEN}"
+            elif [ $scale -gt 5 ]; then
+                color="${BGREEN}"
+            fi
+            spark="${spark}${color}${chars[$scale]}${NC}"
+        fi
+    done
+    echo -ne "$spark"
 }
 
 # ─── DASHBOARD ──────────────────────────────────────────────────────────────
@@ -147,6 +219,12 @@ show_dashboard() {
     PCT=0
     [ $RAW_TOKENS -gt 0 ] && PCT=$(( SAVED_TOKENS * 100 / RAW_TOKENS ))
 
+    COMP_RATIO="0.0"
+    if [ $MAP_TOKENS -gt 0 ]; then
+        local ratio_tenth=$(( RAW_TOKENS * 10 / MAP_TOKENS ))
+        COMP_RATIO="$(( ratio_tenth / 10 )).$(( ratio_tenth % 10 ))"
+    fi
+
     COST_SAVED=$(cost_usd $SAVED_TOKENS)
     COST_CUM=$(cost_usd $CUMULATIVE_SAVED)
 
@@ -163,6 +241,7 @@ show_dashboard() {
     printf "  %-32s %s\n" "Full project scan (tokens):" "$(echo -e "${RED}$(fmt_num $RAW_TOKENS)${NC}")"
     printf "  %-32s %s\n" "Optimized map (tokens):"     "$(echo -e "${GREEN}$(fmt_num $MAP_TOKENS)${NC}")"
     printf "  %-32s %s\n" "Tokens saved:"               "$(echo -e "${YELLOW}$(fmt_num $SAVED_TOKENS)${NC}  (~${PCT}%)")"
+    printf "  %-32s %s\n" "Compression ratio:"          "$(echo -e "${BCYAN}${COMP_RATIO}:1${NC}")"
     printf "  %-32s %s\n" "Est. cost saved:"            "$(echo -e "${BGREEN}\$${COST_SAVED}${NC}")"
     echo ""
 
@@ -177,6 +256,11 @@ show_dashboard() {
     printf "  %-32s %s\n" "Total AI sessions:"          "$(echo -e "${CYAN}${SESSIONS}${NC}")"
     printf "  %-32s %s\n" "Total tokens saved:"         "$(echo -e "${BGREEN}$(fmt_num $CUMULATIVE_SAVED)${NC}")"
     printf "  %-32s %s\n" "Total cost saved (est.):"   "$(echo -e "${BGREEN}\$${COST_CUM}${NC}")"
+    if [ ${#HISTORY_ARR[@]} -gt 0 ]; then
+        echo -ne "  Savings trend (last 10 runs):  ["
+        draw_sparkline "${HISTORY_ARR[@]}"
+        echo -e "]"
+    fi
     echo ""
 
     # ── Model Savings Comparative Matrix ──
@@ -203,7 +287,7 @@ show_dashboard() {
 
     # ── Memory state ──
     if [ -f ".ai-memory/state.md" ]; then
-        local last_line=$(grep "^\!" ".ai-memory/state.md" 2>/dev/null | tail -n 1 || echo "")
+        local last_line=$(grep "^!" ".ai-memory/state.md" 2>/dev/null | tail -n 1 || echo "")
         [ -n "$last_line" ] && echo -e "  ${DIM}💬 Last memory note: $last_line${NC}\n"
     fi
 
@@ -215,8 +299,11 @@ _show_commands() {
     echo -e "  ${CYAN}run${NC}       Interactive cognitive mindmap search & stats save"
     echo -e "  ${CYAN}install${NC}   Interactive or non-interactive setup for this project"
     echo -e "  ${CYAN}save${NC}      Update repository map & save/update token stats"
-    echo -e "  ${CYAN}stats${NC}     Detailed token savings report"
-    echo -e "  ${CYAN}reset${NC}     Clear cumulative stats for this project"
+    echo -e "  ${CYAN}state${NC}     View and edit your AI Memory checklist"
+    echo -e "  ${CYAN}map${NC}       Visualize colorized codebase structure tree"
+    echo -e "  ${CYAN}stats${NC}     Detailed savings report (supports --json/--csv flags)"
+    echo -e "  ${CYAN}clean${NC}     Safely wipe Tokenso cache for this project"
+    echo -e "  ${CYAN}reset${NC}     Clear cumulative stats history"
     echo -e "  ${CYAN}update${NC}    Pull latest version from GitHub"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
@@ -290,7 +377,6 @@ RULES_EOF
     echo -e "  ${BLUE}⬇  Setting up scripts...${NC}"
     mkdir -p .ai-memory/scripts
 
-    # Fallback to local files if developing locally
     if [ -f "scripts/init-smart-search.sh" ]; then
         cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
         chmod +x .ai-memory/scripts/init-smart-search.sh
@@ -309,7 +395,6 @@ RULES_EOF
 
     for choice in $selections; do
         case $choice in
-            # ── AI Agents ──
             1)
                 inject_rules ".claudecode" "Claude Code"
                 inject_rules "CLAUDE.md"   "Claude Code (CLAUDE.md)"
@@ -331,12 +416,10 @@ RULES_EOF
                 inject_rules ".continue/config.yaml" "Continue.dev"
                 ;;
             16)
-                # Antigravity: inject project-level + install global skill
                 inject_rules ".geminirules" "Antigravity (project)"
                 AG_SKILL_DIR="$HOME/.gemini/antigravity/skills/context-optimizer"
                 mkdir -p "$AG_SKILL_DIR/scripts"
                 
-                # Check local files fallback
                 if [ -f "SKILL.md" ] && [ -f "scripts/init-smart-search.sh" ]; then
                     cp "SKILL.md" "$AG_SKILL_DIR/SKILL.md"
                     cp "scripts/init-smart-search.sh" "$AG_SKILL_DIR/scripts/init-smart-search.sh"
@@ -351,7 +434,6 @@ RULES_EOF
                     echo -e "  ✅ Installed Antigravity global skill from GitHub → $AG_SKILL_DIR"
                 fi
                 ;;
-            # ── Editors ──
             9)
                 inject_rules ".cursorrules" "Cursor"
                 mkdir -p .cursor/rules
@@ -364,7 +446,6 @@ RULES_EOF
                 inject_rules ".zed/assistant-rules.md" "Zed AI"
                 ;;
             13) inject_rules ".pearai" "PearAI" ;;
-            # ── Enterprise ──
             14)
                 mkdir -p .github
                 inject_rules ".github/copilot-instructions.md" "GitHub Copilot"
@@ -391,7 +472,8 @@ RULES_EOF
   "installed": "$INSTALL_DATE",
   "sessions": 0,
   "cumulative_saved": 0,
-  "last_run": "$INSTALL_DATE"
+  "last_run": "$INSTALL_DATE",
+  "history": []
 }
 EOF
     fi
@@ -409,7 +491,6 @@ run_save() {
     local silent=false
     local message=""
     
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --silent|-s)
@@ -421,7 +502,6 @@ run_save() {
                 shift 2
                 ;;
             *)
-                # If there's already a message, append to it, otherwise set it
                 if [ -n "$message" ]; then
                     message="$message $1"
                 else
@@ -448,7 +528,6 @@ run_save() {
         echo ""
         run_install
 
-        # Verify setup completed
         if [ ! -d ".ai-memory" ]; then
             echo -e "${RED}❌ Initialization failed or cancelled.${NC}"
             return 1
@@ -459,12 +538,10 @@ run_save() {
         echo -e "${BLUE}⚙  Updating repository map and Tokenso statistics...${NC}"
     fi
     
-    # Regenerate repo map
     if [ -f ".ai-memory/scripts/init-smart-search.sh" ]; then
         bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
     else
         mkdir -p .ai-memory/scripts
-        # Check local files fallback
         if [ -f "scripts/init-smart-search.sh" ]; then
             cp scripts/init-smart-search.sh .ai-memory/scripts/init-smart-search.sh
             chmod +x .ai-memory/scripts/init-smart-search.sh
@@ -478,7 +555,6 @@ run_save() {
 
     load_or_init_stats
 
-    # Calculate tokens saved
     local raw_words=0
     local file_list
     file_list=$(list_source_files)
@@ -497,16 +573,14 @@ run_save() {
     local saved_tokens=$(( raw_tokens - map_tokens ))
     [ $saved_tokens -lt 0 ] && saved_tokens=0
 
-    # Save stats: increment SESSIONS by 1, add saved_tokens to CUMULATIVE_SAVED
     local next_sessions=$(( SESSIONS + 1 ))
     local next_saved=$(( CUMULATIVE_SAVED + saved_tokens ))
     
-    # Save the updated statistics back to file
-    save_stats "$next_sessions" "$next_saved"
+    save_stats "$next_sessions" "$next_saved" "$saved_tokens"
 
-    # Append custom milestone note if provided
+    # Append milestone note
     if [ -n "$message" ]; then
-        echo -e "\n! $message" >> ".ai-memory/state.md"
+        echo -e "! $message" >> ".ai-memory/state.md"
     fi
     
     if [ "$silent" = false ]; then
@@ -518,25 +592,254 @@ run_save() {
     fi
 }
 
-# ─── STATS ──────────────────────────────────────────────────────────────────
+# ─── STATS (JSON / CSV Exports) ─────────────────────────────────────────────
 run_stats() {
-    show_dashboard
+    local format=$1
+    
+    if [ ! -d ".ai-memory" ]; then
+        echo -e "${RED}❌ Tokenso not initialized in this project.${NC}"
+        return 1
+    fi
+    load_or_init_stats
+
+    local file_list
+    file_list=$(list_source_files)
+    local raw_words=0
+    if [ -n "$file_list" ]; then
+        raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    fi
+    [ -z "$raw_words" ] && raw_words=0
+    
+    local map_words=0
+    [ -f ".ai-memory/repo-map.txt" ] && map_words=$(wc -w < ".ai-memory/repo-map.txt")
+    
+    local raw_tokens=$(( raw_words * 13 / 10 ))
+    local map_tokens=$(( map_words * 13 / 10 ))
+    local saved_tokens=$(( raw_tokens - map_tokens ))
+    [ $saved_tokens -lt 0 ] && saved_tokens=0
+    
+    local pct=0
+    [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
+    
+    local comp_ratio="0.0"
+    if [ $map_tokens -gt 0 ]; then
+        local ratio_tenth=$(( raw_tokens * 10 / map_tokens ))
+        comp_ratio="$(( ratio_tenth / 10 )).$(( ratio_tenth % 10 ))"
+    fi
+    
+    local cost_saved=$(cost_usd $saved_tokens)
+    local cost_cum=$(cost_usd $CUMULATIVE_SAVED)
+    
+    if [ "$format" = "--json" ]; then
+        cat << EOF
+{
+  "raw_tokens": $raw_tokens,
+  "map_tokens": $map_tokens,
+  "saved_tokens": $saved_tokens,
+  "saved_percentage": $pct,
+  "compression_ratio": "$comp_ratio",
+  "saved_usd": $cost_saved,
+  "cumulative_saved_tokens": $CUMULATIVE_SAVED,
+  "cumulative_saved_usd": $cost_cum,
+  "total_sessions": $SESSIONS
+}
+EOF
+    elif [ "$format" = "--csv" ]; then
+        echo "raw_tokens,map_tokens,saved_tokens,saved_percentage,compression_ratio,saved_usd,cumulative_saved_tokens,cumulative_saved_usd,total_sessions"
+        echo "${raw_tokens},${map_tokens},${saved_tokens},${pct},${comp_ratio},${cost_saved},${CUMULATIVE_SAVED},${cost_cum},${SESSIONS}"
+    else
+        show_dashboard
+    fi
+}
+
+# ─── STATE (Task Checker & Editor) ─────────────────────────────────────────
+run_state() {
+    local state_file=".ai-memory/state.md"
+    
+    if [ ! -f "$state_file" ]; then
+        echo -e "${YELLOW}⚠️  State file ($state_file) does not exist.${NC}"
+        if [ -t 0 ]; then
+            read -p "  Would you like to initialize it now? [Y/n]: " init_choice
+            if [[ ! "$init_choice" =~ ^[Nn]$ ]]; then
+                mkdir -p .ai-memory
+                cat > "$state_file" << 'EOF'
+# AI Memory State
+
+## Completed Tasks
+- [x] Initialized smart search memory and Tokenso
+
+## Next Actions
+- [ ] Explore codebase modules
+- [ ] Set up project specific rules
+
+## Key Context & Architecture
+- (Add crucial project facts here to avoid re-reading files)
+EOF
+                echo -e "  ${GREEN}✓ State file initialized!${NC}"
+            else
+                return 1
+            fi
+        else
+            return 1
+        fi
+    fi
+
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🧠 AI Memory State — Task Tracker${NC}"
+    echo -e "${BCYAN}======================================================${NC}\n"
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        local trimmed=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        
+        if [[ "$trimmed" =~ ^#+[[:space:]]+(.*) ]]; then
+            local header="${BASH_REMATCH[1]}"
+            echo ""
+            echo -e "  ${BOLD}${BCYAN}[ $header ]${NC}"
+            echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+        elif [[ "$trimmed" =~ ^-[[:space:]]+\[x\][[:space:]]+(.*) ]]; then
+            local task="${BASH_REMATCH[1]}"
+            echo -e "  ${GREEN}✓${NC}  ${DIM}${task}${NC}"
+        elif [[ "$trimmed" =~ ^-[[:space:]]+\[[[:space:]]*\][[:space:]]+(.*) ]]; then
+            local task="${BASH_REMATCH[1]}"
+            echo -e "  ${YELLOW}○${NC}  ${task}"
+        elif [[ "$trimmed" =~ ^-[[:space:]]+(.*) ]]; then
+            local item="${BASH_REMATCH[1]}"
+            echo -e "  ${BLUE}•${NC}  ${item}"
+        elif [[ "$trimmed" =~ ^\![[:space:]]+(.*) ]]; then
+            local milestone="${BASH_REMATCH[1]}"
+            echo ""
+            echo -e "  ${YELLOW}┌───────────────────────────────────────────────┐${NC}"
+            echo -e "  ${YELLOW}│${NC}  ${BGREEN}💬 Milestone:${NC} ${BOLD}${milestone}${NC}"
+            echo -e "  ${YELLOW}└───────────────────────────────────────────────┘${NC}"
+        elif [ -n "$trimmed" ]; then
+            echo -e "  $trimmed"
+        fi
+    done < "$state_file"
+    echo ""
+
+    if [ -t 0 ]; then
+        read -p "  Would you like to edit your AI memory state file? [y/N]: " edit_choice
+        if [[ "$edit_choice" =~ ^[yY](es)?$ ]]; then
+            local editor="nano"
+            if [ -n "$EDITOR" ]; then
+                editor="$EDITOR"
+            elif command -v nano &>/dev/null; then
+                editor="nano"
+            elif command -v vim &>/dev/null; then
+                editor="vim"
+            elif command -v vi &>/dev/null; then
+                editor="vi"
+            fi
+            
+            echo -e "  ${CYAN}Launching $editor for $state_file...${NC}"
+            sleep 0.5
+            $editor "$state_file"
+            
+            echo -e "\n  ${GREEN}✓ State file successfully updated!${NC}"
+            # Recursive display refresh
+            run_state
+        fi
+    fi
+}
+
+# ─── MAP (Folder Structure Visualizer) ─────────────────────────────────────
+run_map() {
+    local map_file=".ai-memory/repo-map.txt"
+    
+    if [ ! -f "$map_file" ]; then
+        echo -e "${YELLOW}⚠️  Repository map does not exist yet.${NC}"
+        echo -e "  ${BLUE}Generating new codebase map...${NC}"
+        if [ -f ".ai-memory/scripts/init-smart-search.sh" ]; then
+            bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+        else
+            echo -e "${RED}❌ Map generation script not found. Run 'tokenso install' first.${NC}"
+            return 1
+        fi
+        echo -e "  ${GREEN}✓ Map successfully generated!${NC}\n"
+    fi
+
+    local bytes=$(wc -c < "$map_file" | tr -d ' ')
+    local words=$(wc -w < "$map_file" | tr -d ' ')
+    local tokens=$(( words * 13 / 10 ))
+
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🗺  Repository Map — Codebase Blueprint${NC}"
+    echo -e "  ${DIM}Size: $bytes bytes  |  Est. Context Weight: ~$tokens tokens${NC}"
+    echo -e "${BCYAN}======================================================${NC}\n"
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        local colorized="$line"
+        
+        # Color tree connectors in DIM CYAN
+        colorized=$(echo "$colorized" | sed -E "s/(├──|└──|│)/${DIM}${CYAN}\1${NC}/g")
+        
+        # Color folders in BOLD BLUE
+        if [[ "$line" =~ .*/$ ]]; then
+            colorized=$(echo "$colorized" | sed -E "s/([a-zA-Z0-9_\.-]+\/)/${BBLUE}\1${NC}/g")
+        else
+            # Color code files in BRIGHT CYAN
+            colorized=$(echo "$colorized" | sed -E "s/([a-zA-Z0-9_\.-]+\.[a-zA-Z0-9]+)/${CYAN}\1${NC}/g")
+        fi
+        
+        echo -e "  $colorized"
+    done < "$map_file"
+    echo ""
+}
+
+# ─── CLEAN (Cache Wiper) ───────────────────────────────────────────────────
+run_clean() {
+    echo -e "${BRED}======================================================${NC}"
+    echo -e "${BRED}⚠️  WIPE TOKENS CACHE & STORAGE${NC}"
+    echo -e "${BRED}======================================================${NC}\n"
+    
+    echo -e "  This action will permanently delete:"
+    echo -e "    ${RED}●${NC} Codebase repository map (${CYAN}.ai-memory/repo-map.txt${NC})"
+    echo -e "    ${RED}●${NC} Token savings statistics and history (${CYAN}.ai-memory/optimizer-stats.json${NC})"
+    echo -e "    ${RED}●${NC} AI Memory milestone checklist (${CYAN}.ai-memory/state.md${NC})"
+    echo ""
+    echo -e "  ${YELLOW}Note: Configuration rules (like .geminirules, .cursorrules) will remain untouched.${NC}"
+    echo ""
+
+    if [ -t 0 ]; then
+        read -p "  Are you absolutely sure you want to proceed? [y/N]: " clean_confirm
+        if [[ "$clean_confirm" =~ ^[yY](es)?$ ]]; then
+            echo -e "\n  ${BLUE}Cleaning cached optimizer storage...${NC}"
+            
+            [ -f ".ai-memory/repo-map.txt" ] && rm ".ai-memory/repo-map.txt"
+            [ -f ".ai-memory/optimizer-stats.json" ] && rm ".ai-memory/optimizer-stats.json"
+            [ -f ".ai-memory/state.md" ] && rm ".ai-memory/state.md"
+            [ -d ".ai-memory/scripts" ] && rm -rf ".ai-memory/scripts"
+            
+            if [ -d ".ai-memory" ] && [ -z "$(ls -A .ai-memory)" ]; then
+                rmdir ".ai-memory"
+            fi
+            
+            sleep 0.5
+            echo -e "  ${GREEN}✓ Cache successfully cleared! Run 'tokenso install' or 'tokenso run' to re-initialize.${NC}\n"
+        else
+            echo -e "\n  ${GREEN}Clean action aborted. Storage preserved.${NC}\n"
+        fi
+    else
+        echo -e "  ${RED}Wipe cancelled (non-interactive shell detected).${NC}\n"
+    fi
 }
 
 # ─── RESET ──────────────────────────────────────────────────────────────────
 run_reset() {
     if [ -f ".ai-memory/optimizer-stats.json" ]; then
-        local installed_date=$(grep -o '"installed":"[^"]*"' ".ai-memory/optimizer-stats.json" | cut -d'"' -f4 || date +"%Y-%m-%d")
+        local installed_date=$(grep -o '"installed"[ :]*"[^"]*"' ".ai-memory/optimizer-stats.json" | cut -d'"' -f4 2>/dev/null || date +"%Y-%m-%d")
+        [ -z "$installed_date" ] && installed_date=$(date +"%Y-%m-%d")
         cat > ".ai-memory/optimizer-stats.json" << EOF
 {
   "version": "$VERSION",
   "installed": "$installed_date",
   "sessions": 0,
   "cumulative_saved": 0,
-  "last_run": "$(date +"%Y-%m-%d %H:%M")"
+  "last_run": "$(date +"%Y-%m-%d %H:%M")",
+  "history": []
 }
 EOF
-        echo -e "${GREEN}✅ Cumulative stats cleared for this project (installation date preserved).${NC}"
+        echo -e "${GREEN}✅ Cumulative stats and history cleared for this project (installation date preserved).${NC}"
     else
         echo -e "${YELLOW}No stats file found.${NC}"
     fi
@@ -578,11 +881,8 @@ print_mindmap_frame() {
     local c_cr="${MAGENTA}"
     local c_ms="${YELLOW}"
     local c_sm="${BGREEN}"
-    
-    # Default paths are DIM/NC
     local p_col="${DIM}"
     
-    # Let's define the components based on step
     local l2_left="│"
     local l2_right="│"
     local l11_left="│"
@@ -613,8 +913,6 @@ print_mindmap_frame() {
     local l8_right="▲"
     
     local core="${BBLUE}[ TOKENSO CORE ]${NC}"
-    
-    # Modify characters based on synapse position (step)
     local syn="${YELLOW}⚡${p_col}"
     
     case $step in
@@ -631,7 +929,6 @@ print_mindmap_frame() {
             l10_c4="${syn}"
             ;;
         3)
-            # Synapse is in the middle of horizontal line
             l4_h1="─────────${syn}─────────"
             l4_h2="─────────${syn}─────────"
             l10_h1="─────────${syn}─────────"
@@ -655,21 +952,11 @@ print_mindmap_frame() {
             l8_left="${syn}"
             l8_right="${syn}"
             ;;
-        7)
-            # Core flash 1: Green
-            core="${BGREEN}[ TOKENSO CORE ]${NC}"
-            ;;
-        8)
-            # Core flash 2: Cyan
-            core="${BCYAN}[ TOKENSO CORE ]${NC}"
-            ;;
-        9)
-            # Core flash 3: Yellow/Gold
-            core="${YELLOW}[ TOKENSO CORE ]${NC}"
-            ;;
+        7) core="${BGREEN}[ TOKENSO CORE ]${NC}" ;;
+        8) core="${BCYAN}[ TOKENSO CORE ]${NC}" ;;
+        9) core="${YELLOW}[ TOKENSO CORE ]${NC}" ;;
     esac
     
-    # Print each line (exactly 13 lines)
     echo -e "     ${c_ws}[Workspace Code]${NC}                            ${c_cr}[Context Rules]${NC}"
     echo -e "            ${p_col}${l2_left}${NC}                                           ${p_col}${l2_right}${NC}"
     echo -e "            ${p_col}▼${NC}                                           ${p_col}▼${NC}"
@@ -696,7 +983,6 @@ run_gui() {
     echo "     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ "
     echo -e "${NC}${DIM}           Cognitive Mindmap Search  v$VERSION${NC}\n"
 
-    # Step 1: Discovered nodes
     echo -e "  ${BOLD}🔍 Scanning project workspace for AI Mindmap nodes...${NC}"
     sleep 0.4
     
@@ -712,17 +998,14 @@ run_gui() {
     sleep 0.4
     echo ""
 
-    # Step 2: Animating link establishment
     echo -e "  ${BOLD}⚡ Firing cognitive synapses to connect nodes...${NC}\n"
     sleep 0.4
 
-    # Print initial state
     print_mindmap_frame 1
     sleep 0.2
     
-    # 6 frames of travel + 3 frames of flashing core
     for step in {2..9}; do
-        printf "\033[13A" # Move up 13 lines to overwrite
+        printf "\033[13A"
         print_mindmap_frame $step
         sleep 0.15
     done
@@ -732,12 +1015,10 @@ run_gui() {
     echo -e "  Estimated savings vectors initialized at ${YELLOW}~85% context compression${NC}."
     echo ""
 
-    # Step 3: Interactive Prompt
     echo -e "  ${BOLD}┌────────────────────────────────────────────────────────┐${NC}"
     echo -e "  ${BOLD}│  ❓ Connect nodes and save Tokenso optimized map? [Y/n] │${NC}"
     echo -e "  ${BOLD}└────────────────────────────────────────────────────────┘${NC}"
     
-    # Prompt user
     if [ -t 0 ]; then
         read -n 1 -r -p "  Selection: " response
         echo ""
@@ -773,7 +1054,22 @@ case "$1" in
         shift
         run_save "$@"
         ;;
-    stats)            run_stats ;;
+    stats)
+        shift
+        run_stats "$@"
+        ;;
+    state)
+        shift
+        run_state "$@"
+        ;;
+    map)
+        shift
+        run_map "$@"
+        ;;
+    clean)
+        shift
+        run_clean "$@"
+        ;;
     reset)            run_reset ;;
     update)           run_update ;;
     --version|-v)     show_version ;;
