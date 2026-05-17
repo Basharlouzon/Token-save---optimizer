@@ -1830,7 +1830,13 @@ HTML_TEMPLATE
     fi
 
     echo -e "\n  ${BGREEN}✨ Premium Offline-First Visual Dashboard Generated!${NC}"
-    echo -e "  📂 Click to open in browser: ${BBLUE}file://${abs_path}${NC}\n"
+    echo -e "  📂 Opening in browser: ${BBLUE}file://${abs_path}${NC}\n"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        open "$abs_path" 2>/dev/null
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$abs_path" 2>/dev/null
+    fi
 }
 
 # ─── STATS (JSON / CSV Exports) ─────────────────────────────────────────────
