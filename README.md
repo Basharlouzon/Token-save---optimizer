@@ -42,7 +42,7 @@ An interactive wizard launches — select any combination of AI tools you use:
 
 ```
 ── AI Coding Agents ──────────────────────────────
- 1) Claude Code          (.claudecode + CLAUDE.md)
+ 1) Claude Code          (.claudecode + CLAUDE.md + brainstorming skill)
  2) Cline                (.clinerules)
  3) Roo Code             (.roomodes)
  4) Kilo                 (.kilorules)
@@ -75,7 +75,7 @@ Tokenso operates in three layers:
 
 1. **Map** — Generates an ultra-compressed repository map at `.ai-memory/repo-map.txt` (excludes `node_modules`, `.git`, binaries, etc.). Instead of running `ls -R` or reading whole files, the AI reads this tiny file to understand project structure.
 
-2. **Inject** — Drops search diet rules and memory protocol instructions into your AI tool's config files (`.cursorrules`, `.clinerules`, `.claudecode`, etc.). The AI automatically follows them on every session.
+2. **Inject** — Drops search diet rules and memory protocol instructions into your AI tool's config files (`.cursorrules`, `.clinerules`, `.claudecode`, etc.). For Claude Code, it also installs skills like **brainstorming** that enforce design-first workflows. The AI automatically follows them on every session.
 
 3. **Track** — Every `tokenso save` records tokens saved, estimated cost reduction, and milestones. Cumulative stats grow over time with a sparkline trend.
 
@@ -321,6 +321,14 @@ tokenso reset
 | Tool | Config File(s) |
 |---|---|
 | Claude Code | `.claudecode` + `CLAUDE.md` |
+
+#### Claude Code Skills
+
+| Skill | Location | Description |
+|---|---|---|
+| Brainstorming | `.claude/skills/brainstorming/SKILL.md` | Design-first workflow — enforces spec approval before any implementation |
+
+> The **brainstorming skill** ships automatically when you select Claude Code during `tokenso install`. It prevents agents from jumping straight to code by requiring an approved design spec first.
 | Cline | `.clinerules` |
 | Roo Code | `.roomodes` |
 | Kilo | `.kilorules` |
