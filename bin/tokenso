@@ -178,6 +178,7 @@ show_dashboard() {
 _show_commands() {
     echo -e "  ${BOLD}── COMMANDS ─────────────────────────────────────────${NC}"
     echo -e "  ${CYAN}install${NC}   Interactive setup wizard for this project"
+    echo -e "  ${CYAN}save${NC}      Update repository map & save/update token stats"
     echo -e "  ${CYAN}stats${NC}     Detailed token savings report"
     echo -e "  ${CYAN}reset${NC}     Clear cumulative stats for this project"
     echo -e "  ${CYAN}update${NC}    Pull latest version from GitHub"
@@ -345,6 +346,55 @@ EOF
     echo -e "${BBLUE}======================================================${NC}\n"
 }
 
+# ─── SAVE & UPDATE ──────────────────────────────────────────────────────────
+run_save() {
+    if [ ! -d ".ai-memory" ]; then
+        echo -e "${RED}❌ Project not initialized. Run 'tokenso install' first.${NC}"
+        return 1
+    fi
+
+    echo -e "${BLUE}⚙  Updating repository map and token statistics...${NC}"
+    
+    # Regenerate repo map
+    if [ -f ".ai-memory/scripts/init-smart-search.sh" ]; then
+        bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+    else
+        mkdir -p .ai-memory/scripts
+        curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/init-smart-search.sh" \
+             -o .ai-memory/scripts/init-smart-search.sh
+        chmod +x .ai-memory/scripts/init-smart-search.sh
+        bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+    fi
+
+    load_or_init_stats
+
+    # Calculate tokens saved
+    RAW_WORDS=0
+    if command -v rg &>/dev/null; then
+        RAW_WORDS=$(rg --files 2>/dev/null | grep -v '\.ai-memory' | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    else
+        RAW_WORDS=$(find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' \
+          -not -path '*/build/*' -not -path '*/dist/*' 2>/dev/null | xargs wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    fi
+    [ -z "$RAW_WORDS" ] && RAW_WORDS=0
+
+    MAP_WORDS=0
+    [ -f ".ai-memory/repo-map.txt" ] && MAP_WORDS=$(wc -w < ".ai-memory/repo-map.txt")
+
+    RAW_TOKENS=$(( RAW_WORDS * 13 / 10 ))
+    MAP_TOKENS=$(( MAP_WORDS * 13 / 10 ))
+    SAVED_TOKENS=$(( RAW_TOKENS - MAP_TOKENS ))
+    [ $SAVED_TOKENS -lt 0 ] && SAVED_TOKENS=0
+
+    save_stats
+    
+    local COST_SAVED=$(cost_usd $SAVED_TOKENS)
+
+    echo -e "${GREEN}✅ Repository map successfully updated!${NC}"
+    echo -e "   📂 Project Map: ${CYAN}.ai-memory/repo-map.txt${NC}"
+    echo -e "   🧠 Saved ${YELLOW}$(fmt_num $SAVED_TOKENS)${NC} tokens (\$${COST_SAVED} est. savings) in this update!"
+}
+
 # ─── STATS ──────────────────────────────────────────────────────────────────
 run_stats() {
     show_dashboard
@@ -380,6 +430,7 @@ show_version() {
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     install)          run_install ;;
+    save)             run_save ;;
     stats)            run_stats ;;
     reset)            run_reset ;;
     update)           run_update ;;

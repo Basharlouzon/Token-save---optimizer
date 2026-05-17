@@ -1,0 +1,17 @@
+.
+./LICENSE
+./bin
+./bin/tokenso
+./install.sh
+./.ai-memory
+./.ai-memory/optimizer-stats.json
+./.ai-memory/state.md
+./.ai-memory/scripts
+./.ai-memory/scripts/init-smart-search.sh
+./.ai-memory/repo-map.txt
+./README.md
+./scripts
+./scripts/init-smart-search.sh
+./scripts/apply-cross-rules.sh
+./SKILL.md
+./.geminirules
