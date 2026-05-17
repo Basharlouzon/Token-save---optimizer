@@ -397,6 +397,7 @@ _show_commands() {
     echo -e "  ${CYAN}update${NC}    Pull latest version from GitHub"
     echo -e "  ${CYAN}doctor${NC}    Run environment diagnostics"
     echo -e "  ${CYAN}status${NC}    Quick one-line project health check"
+    echo -e "  ${CYAN}watch${NC}     Background auto-save on file changes (start/stop/status)"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -2182,6 +2183,7 @@ run_clean() {
     echo -e "    ${RED}●${NC} Codebase repository map (${CYAN}.ai-memory/repo-map.txt${NC})"
     echo -e "    ${RED}●${NC} Token savings statistics and history (${CYAN}.ai-memory/optimizer-stats.json${NC})"
     echo -e "    ${RED}●${NC} AI Memory milestone checklist (${CYAN}.ai-memory/state.md${NC})"
+    echo -e "    ${RED}●${NC} Watcher log & PID (${CYAN}.ai-memory/.watch.*${NC})"
     echo ""
     echo -e "  ${YELLOW}Note: Configuration rules (like .geminirules, .cursorrules) will remain untouched.${NC}"
     echo ""
@@ -2191,10 +2193,20 @@ run_clean() {
         if [[ "$clean_confirm" =~ ^[yY](es)?$ ]]; then
             echo -e "\n  ${BLUE}Cleaning cached optimizer storage...${NC}"
             
+            # Stop watcher if running
+            if [ -f ".ai-memory/.watch.pid" ]; then
+                local wpid
+                wpid=$(cat ".ai-memory/.watch.pid" 2>/dev/null)
+                kill -0 "$wpid" 2>/dev/null && kill "$wpid" 2>/dev/null
+                rm -f ".ai-memory/.watch.pid"
+            fi
+            
             [ -f ".ai-memory/repo-map.txt" ] && rm ".ai-memory/repo-map.txt"
             [ -f ".ai-memory/optimizer-stats.json" ] && rm ".ai-memory/optimizer-stats.json"
             [ -f ".ai-memory/state.md" ] && rm ".ai-memory/state.md"
             [ -d ".ai-memory/scripts" ] && rm -rf ".ai-memory/scripts"
+            [ -f ".ai-memory/.watch.log" ] && rm ".ai-memory/.watch.log"
+            [ -f ".ai-memory/temp_search_matches.txt" ] && rm ".ai-memory/temp_search_matches.txt"
             
             if [ -d ".ai-memory" ] && [ -z "$(ls -A .ai-memory)" ]; then
                 rmdir ".ai-memory"
@@ -2657,6 +2669,233 @@ run_status() {
     echo -e "${BOLD}$project${NC}  ${DIM}v$VERSION  •  $SESSIONS sessions  •  $(fmt_num $CUMULATIVE_SAVED) tokens saved  •  $map_lines map lines  •  $state_items state items  •  $tool_count agents"
 }
 
+# ─── WATCH (Background Auto-Save) ──────────────────────────────────────────
+WATCH_PID_FILE=".ai-memory/.watch.pid"
+WATCH_LOG=".ai-memory/.watch.log"
+WATCH_DEFAULT_INTERVAL=60
+
+_watch_is_stale() {
+    # Compare the newest source file mtime vs the map mtime.
+    # Returns 0 (true) if stale, 1 (false) if fresh.
+    local map_file=".ai-memory/repo-map.txt"
+    [ ! -f "$map_file" ] && return 0
+
+    local map_mtime
+    map_mtime=$(stat -f %m "$map_file" 2>/dev/null || stat -c %Y "$map_file" 2>/dev/null || echo 0)
+
+    # Find the newest source file mtime (excluding .ai-memory itself)
+    local newest_mtime=0
+    if command -v rg &>/dev/null; then
+        local newest_file
+        newest_file=$(rg --files 2>/dev/null \
+            | grep -Ev "$EXCLUDE_DIR_PATTERN" \
+            | grep -Ev "$EXCLUDE_FILE_PATTERN" \
+            | head -200 \
+            | while IFS= read -r f; do
+                [ -f "$f" ] || continue
+                local m=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+                echo "$m $f"
+            done | sort -rn | head -1 | cut -d' ' -f1)
+        [ -n "$newest_file" ] && newest_mtime=$newest_file
+    else
+        # Fallback: just check git index mtime (fast)
+        if [ -d ".git" ]; then
+            local git_mtime
+            git_mtime=$(stat -f %m .git/index 2>/dev/null || stat -c %Y .git/index 2>/dev/null || echo 0)
+            newest_mtime=$git_mtime
+        fi
+    fi
+
+    [ "$newest_mtime" -gt "$map_mtime" ]
+}
+
+_watch_loop() {
+    local interval=${1:-$WATCH_DEFAULT_INTERVAL}
+    echo "tokenso watch started (pid $$, interval ${interval}s, dir $(pwd))" >> "$WATCH_LOG"
+
+    while true; do
+        sleep "$interval"
+
+        # Check PID file is still valid (not replaced by another watcher)
+        if [ -f "$WATCH_PID_FILE" ]; then
+            local stored_pid
+            stored_pid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+            [ "$stored_pid" != "$$" ] && { echo "[$(date)] Stopped: PID mismatch" >> "$WATCH_LOG"; exit 0; }
+        else
+            echo "[$(date)] Stopped: PID file removed" >> "$WATCH_LOG"
+            exit 0
+        fi
+
+        # Only save if files have actually changed
+        if _watch_is_stale; then
+            echo "[$(date)] Change detected — saving..." >> "$WATCH_LOG"
+            run_save --silent >> "$WATCH_LOG" 2>&1
+            echo "[$(date)] Save complete" >> "$WATCH_LOG"
+        fi
+    done
+}
+
+run_watch() {
+    local subcmd=${1:-"start"}
+    local interval=${2:-$WATCH_DEFAULT_INTERVAL}
+
+    case "$subcmd" in
+        start)
+            if [ ! -d ".ai-memory" ]; then
+                echo -e "${RED}❌ Tokenso not initialized in this project.${NC}"
+                echo -e "   Run ${CYAN}tokenso install${NC} first."
+                return 1
+            fi
+
+            # Check if already running
+            if [ -f "$WATCH_PID_FILE" ]; then
+                local old_pid
+                old_pid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+                if kill -0 "$old_pid" 2>/dev/null; then
+                    echo -e "${YELLOW}⚠  Watcher already running (PID $old_pid).${NC}"
+                    echo -e "   Run ${CYAN}tokenso watch stop${NC} first, or ${CYAN}tokenso watch restart${NC}."
+                    return 1
+                else
+                    rm -f "$WATCH_PID_FILE"
+                fi
+            fi
+
+            echo -e "${BCYAN}======================================================${NC}"
+            echo -e "${BGREEN}👁  Tokenso Watch — Background Auto-Save${NC}"
+            echo -e "${BCYAN}======================================================${NC}\n"
+
+            echo -e "  ${BOLD}Interval:${NC}     ${CYAN}${interval}s${NC} (checks for file changes)"
+            echo -e "  ${BOLD}Project:${NC}      ${CYAN}$(pwd)${NC}"
+            echo -e "  ${BOLD}PID file:${NC}     ${DIM}.ai-memory/.watch.pid${NC}"
+            echo -e "  ${BOLD}Log file:${NC}     ${DIM}.ai-memory/.watch.log${NC}"
+            echo -e "  ${BOLD}Trigger:${NC}      Only saves when source files change (mtimes)"
+            echo ""
+
+            # Start the background loop — use nohup + disown so it survives
+            # the parent shell exiting. The loop self-manages via the PID file.
+            nohup bash -c "
+                TOKENSO_BIN='$(command -v tokenso 2>/dev/null || echo bin/tokenso)'
+                interval=$interval
+                pid_file='$WATCH_PID_FILE'
+                log_file='$WATCH_LOG'
+                workdir='$(pwd)'
+
+                echo \"[\$(date)] Watcher started (interval \${interval}s)\" >> \"\$log_file\"
+
+                while true; do
+                    sleep \"\$interval\"
+                    [ ! -f \"\$pid_file\" ] && { echo \"[\$(date)] Stopped: PID file removed\" >> \"\$log_file\"; exit 0; }
+                    stored=\$(cat \"\$pid_file\" 2>/dev/null)
+                    [ \"\$stored\" != \"\$\$\" ] && { echo \"[\$(date)] Stopped: PID mismatch\" >> \"\$log_file\"; exit 0; }
+
+                    # Check if files changed by comparing mtimes
+                    map_file=\"\$workdir/.ai-memory/repo-map.txt\"
+                    needs_save=false
+
+                    if [ ! -f \"\$map_file\" ]; then
+                        needs_save=true
+                    else
+                        map_mtime=\$(stat -f %m \"\$map_file\" 2>/dev/null || stat -c %Y \"\$map_file\" 2>/dev/null || echo 0)
+                        # Quick check: git index is a proxy for \"any file changed\"
+                        if [ -f \"\$workdir/.git/index\" ]; then
+                            git_mtime=\$(stat -f %m \"\$workdir/.git/index\" 2>/dev/null || stat -c %Y \"\$workdir/.git/index\" 2>/dev/null || echo 0)
+                            [ \"\$git_mtime\" -gt \"\$map_mtime\" ] && needs_save=true
+                        else
+                            # No git — check the newest file in the project
+                            newest=\$(find \"\$workdir\" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.ai-memory/*' -newer \"\$map_file\" 2>/dev/null | head -1)
+                            [ -n \"\$newest\" ] && needs_save=true
+                        fi
+                    fi
+
+                    if \$needs_save; then
+                        echo \"[\$(date)] Change detected — saving...\" >> \"\$log_file\"
+                        cd \"\$workdir\" && bash \"\$TOKENSO_BIN\" save --silent >> \"\$log_file\" 2>&1
+                        echo \"[\$(date)] Save complete\" >> \"\$log_file\"
+                    fi
+                done
+            " >> "$WATCH_LOG" 2>&1 &
+            disown
+
+            local pid=$!
+            echo "$pid" > "$WATCH_PID_FILE"
+            echo -e "  ${GREEN}✓ Watcher started in background (PID $pid)${NC}"
+            echo -e "  ${DIM}Logs: tail -f .ai-memory/.watch.log${NC}"
+            echo -e "  ${DIM}Stop:  tokenso watch stop${NC}"
+            echo -e "  ${DIM}Info:  tokenso watch status${NC}\n"
+            ;;
+
+        stop)
+            if [ ! -f "$WATCH_PID_FILE" ]; then
+                echo -e "${YELLOW}⚠  No watcher running in this project.${NC}"
+                return 1
+            fi
+            local pid
+            pid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null
+                echo -e "${GREEN}✓ Watcher stopped (was PID $pid)${NC}"
+            else
+                echo -e "${YELLOW}⚠  Watcher PID $pid is not running (cleaning up).${NC}"
+            fi
+            rm -f "$WATCH_PID_FILE"
+            echo "[$(date)] Stopped by user" >> "$WATCH_LOG"
+            ;;
+
+        restart)
+            run_watch stop 2>/dev/null
+            sleep 0.3
+            run_watch start "$interval"
+            ;;
+
+        status)
+            if [ -f "$WATCH_PID_FILE" ]; then
+                local pid
+                pid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+                if kill -0 "$pid" 2>/dev/null; then
+                    echo -e "${GREEN}✓ Watcher running${NC}  ${DIM}(PID $pid)${NC}"
+                    # Show last 3 log entries
+                    if [ -f "$WATCH_LOG" ]; then
+                        echo -e "\n  ${BOLD}Recent activity:${NC}"
+                        tail -3 "$WATCH_LOG" | while IFS= read -r line; do
+                            echo -e "  ${DIM}$line${NC}"
+                        done
+                    fi
+                else
+                    echo -e "${RED}✗ Watcher PID $pid is dead (stale PID file)${NC}"
+                    echo -e "  Run ${CYAN}tokenso watch stop${NC} to clean up, then ${CYAN}tokenso watch start${NC}."
+                fi
+            else
+                echo -e "${YELLOW}⚠  No watcher running in this project.${NC}"
+                echo -e "  Run ${CYAN}tokenso watch start${NC} to begin."
+            fi
+            ;;
+
+        log)
+            if [ -f "$WATCH_LOG" ]; then
+                tail -20 "$WATCH_LOG"
+            else
+                echo -e "${YELLOW}No log file found. Watcher may not have been started.${NC}"
+            fi
+            ;;
+
+        *)
+            echo -e "${CYAN}Usage:${NC} tokenso watch <command> [interval]"
+            echo ""
+            echo -e "  ${CYAN}start${NC}     Start background auto-save (default: 60s)"
+            echo -e "  ${CYAN}stop${NC}      Stop the watcher"
+            echo -e "  ${CYAN}restart${NC}   Stop and restart"
+            echo -e "  ${CYAN}status${NC}    Show if watcher is running"
+            echo -e "  ${CYAN}log${NC}       Show recent watcher activity"
+            echo ""
+            echo -e "  ${DIM}Examples:${NC}"
+            echo -e "    tokenso watch start           # auto-save every 60s on change"
+            echo -e "    tokenso watch start 120       # auto-save every 2min on change"
+            echo -e "    tokenso watch stop"
+            echo -e "    tokenso watch status"
+            ;;
+    esac
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
@@ -2695,6 +2934,10 @@ case "$1" in
     update)           run_update ;;
     doctor)           run_doctor ;;
     status)           run_status ;;
+    watch)
+        shift
+        run_watch "$@"
+        ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;
     "")               show_dashboard ;;
