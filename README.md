@@ -1,38 +1,42 @@
 # Tokenso 🧠🔋
 
-> Stop AI agents from wasting tokens, looping, and reading your entire codebase on every task.
+[![Version](https://img.shields.io/badge/version-2.2.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
+[![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
-AI coding agents are incredibly powerful, but they often suffer from a critical flaw: **Context Bloat & Token Waste.** When agents explore a large codebase, they read entire files just to find a single line, dump huge search results into memory, and loop over old mistakes — burning tokens and money.
+> **Stop AI agents from wasting tokens, looping, and reading your entire codebase.**
 
-**Tokenso** is a CLI tool that enforces a "Search Diet" and a "Memory Refresh Protocol" across **15+ AI tools** — from CLI agents to editors to enterprise platforms.
+AI coding agents burn tokens fast — they read entire files to find one line, dump massive search results into context, and loop over old mistakes. **Tokenso** puts your agents on a strict search diet with a persistent memory protocol, working across **16+ AI tools** out of the box.
+
+Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
 
-## ⚡ One-Time Global Install
+## ⚡ Install
 
-Run this **once** on your machine. It installs the `tokenso` command globally:
+Run **once** on your machine to install the `tokenso` command globally:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
+```
+
+For CI or unattended setups (no interactive prompts):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash -s -- -y
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-To run the interactive cognitive mindmap search:
-
-```bash
-tokenso run
-```
-
-Or run the project setup wizard to configure rules for your editors/agents:
+Initialize Tokenso in any project:
 
 ```bash
 tokenso install
 ```
 
-An interactive wizard launches — pick any tools you use:
+An interactive wizard launches — select any combination of AI tools you use:
 
 ```
 ── AI Coding Agents ──────────────────────────────
@@ -59,13 +63,35 @@ An interactive wizard launches — pick any tools you use:
   Your selection: 1 9 14
 ```
 
-Select **multiple tools** with space-separated numbers, or `0` for all.
+Select **multiple tools** with space-separated numbers, or `0` for all. Tokenso injects optimized rules into each config file and generates a compressed repo map — everything starts working immediately.
 
 ---
 
-## 🧠 Interactive Terminal Mindmap
+## 💡 How It Works
 
-When you run `tokenso run`, Tokenso visually maps the relationships and files in your workspace, fires "synapses" to link nodes together, prompts to save the optimized map, and launches the live stats dashboard:
+Tokenso operates in three layers:
+
+1. **Map** — Generates an ultra-compressed repository map at `.ai-memory/repo-map.txt` (excludes `node_modules`, `.git`, binaries, etc.). Instead of running `ls -R` or reading whole files, the AI reads this tiny file to understand project structure.
+
+2. **Inject** — Drops search diet rules and memory protocol instructions into your AI tool's config files (`.cursorrules`, `.clinerules`, `.claudecode`, etc.). The AI automatically follows them on every session.
+
+3. **Track** — Every `tokenso save` records tokens saved, estimated cost reduction, and milestones. Cumulative stats grow over time with a sparkline trend.
+
+| Without Tokenso | With Tokenso |
+|---|---|
+| AI runs `ls -R` & reads whole files | AI reads a tiny compressed map (~1% of original) |
+| AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
+| Tokens explode every session | Context stays clean and savings compound |
+
+Once installed, **you don't need to do anything**. The AI reads the rules automatically. If you notice it looping, just tell it:
+
+> *"Please refresh your memory state."*
+
+---
+
+## 🧠 Interactive Mindmap
+
+Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers code nodes, fires synapses to link them, and saves the optimized map:
 
 ```
   ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ 
@@ -88,17 +114,15 @@ When you run `tokenso run`, Tokenso visually maps the relationships and files in
 
   ✨ Cognitive Mindmap Successfully Integrated!
   Estimated savings vectors initialized at ~85% context compression.
-
-  ┌────────────────────────────────────────────────────────┐
-  │  ❓ Connect nodes and save Tokenso optimized map? [Y/n] │
-  └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 Live Token Dashboard
+## 📊 Dashboard & Stats
 
-Just type `tokenso` or `tokenso stats` in any initialized project to see your exact token savings:
+### Terminal Dashboard
+
+Type `tokenso` or `tokenso stats` in any initialized project:
 
 ```
 📁 Project:  my-awesome-app
@@ -118,30 +142,99 @@ Just type `tokenso` or `tokenso stats` in any initialized project to see your ex
   Total cost saved (est.):      $5.29
 ```
 
+### HTML Visual Dashboard
+
+Generate a premium offline dashboard with interactive charts, ROI simulator, and milestone timeline:
+
+```bash
+tokenso stats --html
+```
+
+Opens a glassmorphic single-file HTML page with savings trend charts, a radial gauge, model cost comparisons, and an interactive savings calculator — no server required.
+
+### Export Formats
+
+```bash
+tokenso stats --json    # JSON output for scripts and integrations
+tokenso stats --csv     # CSV for spreadsheets and analysis
+```
+
 ---
 
-## 💡 How It Works
+## 🔍 Zero-Waste Code Search
 
-| Without Tokenso | With Tokenso |
-|---|---|
-| AI runs `ls -R` & reads whole files | AI reads a tiny compressed `.ai-memory/repo-map.txt` |
-| AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
-| Tokens explode every session | Context stays clean and cumulative savings grow |
+Search your codebase without flooding the AI's context window:
 
-Once installed, **you don't need to do anything**. The AI automatically reads the rules. But if you notice it looping, simply tell it:
-> *"Please refresh your memory state."*
+```bash
+tokenso search "handleSubmit"
+```
+
+Returns file path matches from the repo map plus top code snippets with highlighted matches — capped at 15 results to keep context lean:
+
+```
+🔍 Zero-Waste Code Search  Query: 'handleSubmit'
+
+  [ 📁 Codebase Blueprint Matches ]
+  ─────────────────────────────────────────
+    • src/forms/LoginForm.tsx
+    • src/hooks/useForm.ts
+
+  [ 📝 Source Code Matches (Max 15) ]
+  ─────────────────────────────────────────
+  📂 src/forms/LoginForm.tsx
+     Line 42: const handleSubmit = async (e) => {
+
+  Searched 47 files | Found 3 matches | Showing top 2 | Done in 0s
+```
 
 ---
 
-## 🛠 Commands
+## 🧠 Memory State Management
+
+Tokenso maintains a persistent task tracker that AI agents read and write to:
+
+```bash
+# View current AI memory state
+tokenso state
+
+# Save a milestone note after completing work
+tokenso save "Implemented auth flow with JWT tokens"
+```
+
+The state file (`.ai-memory/state.md`) tracks completed tasks, next actions, and key architectural decisions — so the AI can pick up where it left off without re-reading the entire codebase.
+
+---
+
+## 🗺 Repository Map
+
+View the colorized compressed tree of your project:
+
+```bash
+tokenso map
+```
+
+Shows a syntax-highlighted directory tree with file/folder counts and estimated token weight — the same map the AI reads instead of exploring manually.
+
+---
+
+## 🛠 All Commands
 
 | Command | Description |
 |---|---|
-| `tokenso` | Live dashboard with stats |
-| `tokenso run` | Interactive cognitive mindmap search & stats save |
-| `tokenso install` | Interactive project setup wizard |
+| `tokenso` | Live terminal dashboard with stats |
+| `tokenso run` | Interactive cognitive mindmap & stats save |
+| `tokenso install` | Project setup wizard (select AI tools) |
+| `tokenso save` | Update repo map & record token stats |
+| `tokenso save "note"` | Save stats with a milestone note |
+| `tokenso search \<query\>` | Zero-waste codebase search |
+| `tokenso state` | View & edit AI memory checklist |
+| `tokenso map` | Colorized repository structure tree |
 | `tokenso stats` | Detailed token report |
-| `tokenso reset` | Clear cumulative stats |
+| `tokenso stats --html` | Generate visual HTML dashboard |
+| `tokenso stats --json` | Export stats as JSON |
+| `tokenso stats --csv` | Export stats as CSV |
+| `tokenso clean` | Wipe cached optimizer files for this project |
+| `tokenso reset` | Clear cumulative stats history |
 | `tokenso update` | Self-update from GitHub |
 | `tokenso --version` | Show version |
 
@@ -150,6 +243,7 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 ## 🤝 Compatibility
 
 ### AI Coding Agents
+
 | Tool | Config File(s) |
 |---|---|
 | Claude Code | `.claudecode` + `CLAUDE.md` |
@@ -162,6 +256,7 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 | Continue.dev | `.continue/config.yaml` |
 
 ### ⭐ Antigravity (Google DeepMind)
+
 | What | Where |
 |---|---|
 | **Global skill** | `~/.gemini/antigravity/skills/context-optimizer/` |
@@ -170,6 +265,7 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 > Selecting option `16` installs a persistent global skill into Antigravity's skill directory so the optimizer is active in **every** project automatically — not just the current one.
 
 ### AI-Powered Editors
+
 | Tool | Config File(s) |
 |---|---|
 | Cursor | `.cursorrules` + `.cursor/rules/token-optimizer.mdc` |
@@ -179,6 +275,7 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 | PearAI | `.pearai` |
 
 ### Enterprise & Cloud
+
 | Tool | Config File(s) |
 |---|---|
 | GitHub Copilot | `.github/copilot-instructions.md` |
@@ -186,6 +283,12 @@ Once installed, **you don't need to do anything**. The AI automatically reads th
 
 ---
 
+## 🤝 Contributing
+
+PRs and issues are welcome at [github.com/Basharlouzon/Token-save---optimizer](https://github.com/Basharlouzon/Token-save---optimizer).
+
+---
+
 ## 📄 License
 
-MIT License — free to use, modify, and distribute.
+MIT License — free to use, modify, and distribute. See [LICENSE](LICENSE).
