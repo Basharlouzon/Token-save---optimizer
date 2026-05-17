@@ -2,6 +2,9 @@
 # install.sh — Global Installer for Tokenso CLI
 # https://github.com/Basharlouzon/Token-save---optimizer
 
+set -o pipefail
+trap 'echo "Tokenso install failed at line $LINENO" >&2' ERR
+
 # ─── Argument Parsing ──────────────────────────────────────────────────────
 UNATTENDED=false
 while [[ $# -gt 0 ]]; do
@@ -61,44 +64,62 @@ step_failed() {
 
 # ─── 1. System Environment Scan ───────────────────────────────────────────
 step_start "Detecting system configuration"
-sleep 0.3
 current_shell=$(basename "$SHELL")
 step_done "Detected system configuration (Shell: ${CYAN}$current_shell${NC})"
 
 # ─── 2. Determine Target Directory ───────────────────────────────────────
 step_start "Locating target installation path"
-sleep 0.2
 INSTALL_DIR="/usr/local/bin"
 if [ -d "$HOME/.local/bin" ] && [ -w "$HOME/.local/bin" ]; then
     INSTALL_DIR="$HOME/.local/bin"
+fi
+# Validate target is reachable (writable directly OR via sudo).
+if [ ! -d "$INSTALL_DIR" ]; then
+    mkdir -p "$INSTALL_DIR" 2>/dev/null || sudo mkdir -p "$INSTALL_DIR" \
+        || { step_failed "Cannot create $INSTALL_DIR"; exit 1; }
+fi
+if [ ! -w "$INSTALL_DIR" ] && ! sudo -n true 2>/dev/null && [ "$UNATTENDED" = true ]; then
+    step_failed "$INSTALL_DIR not writable and sudo unavailable in unattended mode"
+    exit 1
 fi
 step_done "Locating target installation path (Target: ${CYAN}$INSTALL_DIR${NC})"
 
 # ─── 3. Copy Executable Files ─────────────────────────────────────────────
 step_start "Copying Tokenso executable to target"
-sleep 0.4
 CLI_URL="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso"
 
-if [ -f "bin/tokenso" ]; then
-    if [ ! -w "$INSTALL_DIR" ]; then
-        sudo cp bin/tokenso "$INSTALL_DIR/tokenso"
-        sudo chmod +x "$INSTALL_DIR/tokenso"
-    else
-        cp bin/tokenso "$INSTALL_DIR/tokenso"
-        chmod +x "$INSTALL_DIR/tokenso"
+install_cli_from() {
+    # Atomically install $1 to $INSTALL_DIR/tokenso, using sudo if needed.
+    local src=$1
+    if [ ! -s "$src" ]; then
+        step_failed "Source CLI is empty or missing: $src"
+        return 1
     fi
+    if ! head -1 "$src" | grep -q '^#!'; then
+        step_failed "Source CLI does not begin with a shebang (corrupt download?): $src"
+        return 1
+    fi
+    if [ ! -w "$INSTALL_DIR" ]; then
+        sudo install -m 0755 "$src" "$INSTALL_DIR/tokenso"
+    else
+        install -m 0755 "$src" "$INSTALL_DIR/tokenso"
+    fi
+}
+
+if [ -f "bin/tokenso" ]; then
+    install_cli_from "bin/tokenso" || exit 1
     step_done "Copied Tokenso executable from local source successfully!"
 else
-    if [ ! -w "$INSTALL_DIR" ]; then
-        if [ "$UNATTENDED" = false ]; then
-            echo -e "  ${YELLOW}🔑 Sudo privileges required to install to $INSTALL_DIR...${NC}" >&2
-        fi
-        sudo curl -sSL "$CLI_URL" -o "$INSTALL_DIR/tokenso"
-        sudo chmod +x "$INSTALL_DIR/tokenso"
-    else
-        curl -sSL "$CLI_URL" -o "$INSTALL_DIR/tokenso"
-        chmod +x "$INSTALL_DIR/tokenso"
+    if [ ! -w "$INSTALL_DIR" ] && [ "$UNATTENDED" = false ]; then
+        echo -e "  ${YELLOW}🔑 Sudo privileges required to install to $INSTALL_DIR...${NC}" >&2
     fi
+    TMP_CLI=$(mktemp -t tokenso.XXXXXX)
+    trap 'rm -f "$TMP_CLI"' EXIT
+    if ! curl -fsSL "$CLI_URL" -o "$TMP_CLI"; then
+        step_failed "Download failed from $CLI_URL"
+        exit 1
+    fi
+    install_cli_from "$TMP_CLI" || exit 1
     step_done "Downloaded & installed Tokenso CLI globally successfully!"
 fi
 
@@ -185,7 +206,6 @@ step_done "Installed shell autocomplete support to ~/.tokenso_completion.sh"
 
 # ─── 5. PATH Registration and Shell Profile Detection ────────────────────
 step_start "Scanning shell profile configuration"
-sleep 0.3
 
 PROFILE=""
 if [ "$current_shell" = "zsh" ] && [ -f "$HOME/.zshrc" ]; then
@@ -200,28 +220,61 @@ fi
 [ -z "$PROFILE" ] && [ -f "$HOME/.profile" ] && PROFILE="$HOME/.profile"
 [ -z "$PROFILE" ] && PROFILE="$HOME/.zshrc"
 
+# Idempotent appends — bracketed by unique markers so re-running this installer
+# never duplicates lines in the user's shell profile.
+TOKENSO_PATH_BEGIN="# >>> tokenso path >>>"
+TOKENSO_PATH_END="# <<< tokenso path <<<"
+TOKENSO_COMP_BEGIN="# >>> tokenso completion >>>"
+TOKENSO_COMP_END="# <<< tokenso completion <<<"
+
+append_block_once() {
+    # append_block_once <file> <begin-marker> <end-marker> <body...>
+    local file=$1 begin=$2 end=$3
+    shift 3
+    [ -f "$file" ] || touch "$file"
+    if grep -qF "$begin" "$file" 2>/dev/null; then
+        return 1   # already present
+    fi
+    {
+        echo ""
+        echo "$begin"
+        printf '%s\n' "$@"
+        echo "$end"
+    } >> "$file"
+    return 0
+}
+
+write_path_block() {
+    if append_block_once "$PROFILE" "$TOKENSO_PATH_BEGIN" "$TOKENSO_PATH_END" \
+        "# Tokenso CLI PATH configuration" \
+        "export PATH=\"\$PATH:$INSTALL_DIR\""; then
+        return 0
+    fi
+    return 1
+}
+
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     step_done "Shell profile scanned (${YELLOW}PATH insertion needed${NC})"
     echo "" >&2
     if [ "$UNATTENDED" = false ]; then
         echo -e "  ${YELLOW}⚠️  Warning: $INSTALL_DIR is not in your current PATH.${NC}" >&2
     fi
-    
+
     if [ "$UNATTENDED" = true ]; then
-        [ -f "$PROFILE" ] || touch "$PROFILE"
-        echo "" >> "$PROFILE"
-        echo "# Tokenso CLI PATH configuration" >> "$PROFILE"
-        echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$PROFILE"
-        echo -e "  ${GREEN}✓ Shell profile ($PROFILE) automatically updated (unattended)!${NC}" >&2
+        if write_path_block; then
+            echo -e "  ${GREEN}✓ Shell profile ($PROFILE) automatically updated (unattended)!${NC}" >&2
+        else
+            echo -e "  ${DIM}Tokenso PATH block already present in $PROFILE — skipped.${NC}" >&2
+        fi
     else
         read -p "  Would you like to automatically append it to your $PROFILE? [Y/n]: " path_choice
         if [[ ! "$path_choice" =~ ^[Nn]$ ]]; then
-            [ -f "$PROFILE" ] || touch "$PROFILE"
-            echo "" >> "$PROFILE"
-            echo "# Tokenso CLI PATH configuration" >> "$PROFILE"
-            echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$PROFILE"
-            echo -e "  ${GREEN}✓ Shell profile ($PROFILE) updated successfully!${NC}" >&2
-            echo -e "  ${YELLOW}💡 Please run 'source $PROFILE' or restart terminal to load the global path.${NC}" >&2
+            if write_path_block; then
+                echo -e "  ${GREEN}✓ Shell profile ($PROFILE) updated successfully!${NC}" >&2
+                echo -e "  ${YELLOW}💡 Please run 'source $PROFILE' or restart terminal to load the global path.${NC}" >&2
+            else
+                echo -e "  ${DIM}Tokenso PATH block already present — skipped.${NC}" >&2
+            fi
         else
             echo -e "  ${DIM}Skipped profile configuration.${NC}" >&2
         fi
@@ -236,30 +289,28 @@ else
     fi
 fi
 
-# Append autocomplete script source if not already there
-if [ -f "$PROFILE" ]; then
-    if ! grep -q "tokenso_completion.sh" "$PROFILE" 2>/dev/null; then
-        echo "" >> "$PROFILE"
-        echo "# Tokenso CLI completion configuration" >> "$PROFILE"
-        echo "[ -f \"\$HOME/.tokenso_completion.sh\" ] && source \"\$HOME/.tokenso_completion.sh\"" >> "$PROFILE"
-        if [ "$UNATTENDED" = false ]; then
-            echo -e "  ${GREEN}✓ Shell autocomplete configuration appended to $PROFILE.${NC}" >&2
-        fi
-    fi
-else
-    if [ "$UNATTENDED" = true ]; then
-        touch "$PROFILE"
-        echo "# Tokenso CLI completion configuration" >> "$PROFILE"
-        echo "[ -f \"\$HOME/.tokenso_completion.sh\" ] && source \"\$HOME/.tokenso_completion.sh\"" >> "$PROFILE"
+# Append autocomplete sourcing — idempotent via markers.
+if append_block_once "$PROFILE" "$TOKENSO_COMP_BEGIN" "$TOKENSO_COMP_END" \
+    "# Tokenso CLI completion configuration" \
+    "[ -f \"\$HOME/.tokenso_completion.sh\" ] && source \"\$HOME/.tokenso_completion.sh\""; then
+    if [ "$UNATTENDED" = false ]; then
+        echo -e "  ${GREEN}✓ Shell autocomplete configuration appended to $PROFILE.${NC}" >&2
     fi
 fi
 
 # ─── 6. Immediate Local Setup Onboarding ──────────────────────────────────
 if [ "$UNATTENDED" = false ]; then
-    read -p "  Would you like to configure Tokenso AI memory in the current workspace now? [y/N]: " configure_now
-    if [[ "$configure_now" =~ ^[yY](es)?$ ]]; then
-        echo "" >&2
-        "$INSTALL_DIR/tokenso" install
+    # Only offer in-workspace setup if the binary is invokable from PATH or
+    # via the absolute path we just wrote — otherwise tell the user how to
+    # activate it instead of running a command that will fail.
+    if command -v tokenso &>/dev/null || [ -x "$INSTALL_DIR/tokenso" ]; then
+        read -p "  Would you like to configure Tokenso AI memory in the current workspace now? [y/N]: " configure_now
+        if [[ "$configure_now" =~ ^[yY](es)?$ ]]; then
+            echo "" >&2
+            "$INSTALL_DIR/tokenso" install
+        fi
+    else
+        echo -e "  ${YELLOW}💡 Open a new shell or run 'source $PROFILE', then run 'tokenso install' inside your project.${NC}" >&2
     fi
 fi
 

@@ -5,27 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tokenso — Context Optimizer Dashboard</title>
     
-    <!-- Outfit & Fira Code Fonts -->
+    <!-- Outfit & Fira Code Fonts — `display=swap` ensures the page renders
+         immediately with the system-font fallback if the CDN is unreachable. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+          rel="stylesheet"
+          media="all"
+          onerror="this.media='print'">
     
     <script>
     window.TOKENSO_DATA = {
-        projectName: "claudememory",
-        dateExported: "2026-05-17 16:08",
-        activeAgents: "Kilo Gemini CLI / Antigravity Antigravity ✓ global",
-        filesCount: 8,
-        rawTokens: 18970,
-        mapTokens: 19,
-        savedTokens: 18951,
+        projectName: "loving-hofstadter-eefd20",
+        dateExported: "2026-05-17 16:15",
+        activeAgents: "Claude Code Claude Code (CLAUDE.md) Kilo Gemini CLI / Antigravity Antigravity ✓ global",
+        filesCount: 9,
+        rawTokens: 19098,
+        mapTokens: 23,
+        savedTokens: 19075,
         pct: 99,
-        compRatio: "998.4",
-        costSaved: "0.0568",
-        sessions: 3,
-        cumulativeSaved: 56853,
-        costCum: "0.1705",
-        history: [18951,18951,18951],
+        compRatio: "830.3",
+        costSaved: "0.0572",
+        sessions: 6,
+        cumulativeSaved: 114078,
+        costCum: "0.3422",
+        history: [18951,18951,18951,19075,19075,19075],
         milestones: ["test"]
     };
     </script>
@@ -41,8 +45,8 @@
             --text-dim: #9898a3;
             --gold: #ffd60a;
             
-            --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            --font-mono: 'Fira Code', 'Courier New', monospace;
+            --font-sans: 'Outfit', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
         }
         
         * {
@@ -666,18 +670,20 @@
                     <div>
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Runs per day:</span>
-                                <span id="val-runs">15</span>
+                                <span>AI runs per day:</span>
+                                <span><span id="val-runs">15</span> runs/day</span>
                             </div>
-                            <input type="range" class="slider" id="slider-runs" min="1" max="100" value="15">
+                            <input type="range" class="slider" id="slider-runs" min="1" max="100" value="15"
+                                   aria-label="AI runs per day">
                         </div>
-                        
+
                         <div class="slider-group" style="margin-bottom: 25px;">
                             <div class="slider-label">
-                                <span>Avg tokens saved/run:</span>
-                                <span id="val-tokens">0</span>
+                                <span>Avg tokens saved per run:</span>
+                                <span><span id="val-tokens">0</span> tokens/run</span>
                             </div>
-                            <input type="range" class="slider" id="slider-tokens" min="1000" max="100000" step="500" value="5000">
+                            <input type="range" class="slider" id="slider-tokens" min="1000" max="100000" step="500" value="5000"
+                                   aria-label="Average tokens saved per run">
                         </div>
                         
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
@@ -745,32 +751,72 @@
     
     <!-- JavaScript Interaction Engine -->
     <script>
+        // Normalize and validate TOKENSO_DATA so missing/malformed input renders
+        // a friendly empty state rather than throwing in the middle of init.
+        function normalizeData(raw) {
+            const d = raw && typeof raw === 'object' ? raw : {};
+            const num = (v, fallback) => {
+                const n = typeof v === 'number' ? v : parseFloat(v);
+                return Number.isFinite(n) ? n : fallback;
+            };
+            return {
+                projectName:     d.projectName     || '—',
+                dateExported:    d.dateExported    || '',
+                activeAgents:    d.activeAgents    || '',
+                filesCount:      num(d.filesCount, 0),
+                rawTokens:       num(d.rawTokens, 0),
+                mapTokens:       num(d.mapTokens, 0),
+                savedTokens:     num(d.savedTokens, 0),
+                pct:             num(d.pct, 0),
+                compRatio:       d.compRatio != null ? String(d.compRatio) : '0',
+                costSaved:       d.costSaved != null ? String(d.costSaved) : '0',
+                sessions:        num(d.sessions, 0),
+                cumulativeSaved: num(d.cumulativeSaved, 0),
+                costCum:         d.costCum != null ? String(d.costCum) : '0',
+                history:         Array.isArray(d.history) ? d.history.filter(v => Number.isFinite(+v)).map(v => +v) : [],
+                milestones:      Array.isArray(d.milestones) ? d.milestones : []
+            };
+        }
+
+        // Resize-debounce so dragging the window edge doesn't trigger a redraw
+        // per pixel and tank rendering on chart-heavy histories.
+        function debounce(fn, ms) {
+            let t;
+            return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+        }
+
+        const setText = (id, v) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = v;
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
+            window.TOKENSO_DATA = normalizeData(window.TOKENSO_DATA);
             const data = window.TOKENSO_DATA;
-            
+
             // Populating raw metadata
-            document.getElementById('dt-project').textContent = data.projectName;
-            document.getElementById('dt-date').textContent = data.dateExported;
-            document.getElementById('dt-files').textContent = data.filesCount;
-            document.getElementById('dt-tools').textContent = data.activeAgents || 'None detected';
-            
+            setText('dt-project', data.projectName);
+            setText('dt-date', data.dateExported);
+            setText('dt-files', data.filesCount);
+            setText('dt-tools', data.activeAgents || 'None detected');
+
             // Populate card values
-            document.getElementById('card-sessions').textContent = data.sessions;
-            document.getElementById('card-tokens').textContent = data.cumulativeSaved.toLocaleString();
-            document.getElementById('card-savings').textContent = '$' + parseFloat(data.costCum).toFixed(2);
-            document.getElementById('card-ratio').textContent = data.compRatio + 'x';
-            
+            setText('card-sessions', data.sessions);
+            setText('card-tokens', data.cumulativeSaved.toLocaleString());
+            setText('card-savings', '$' + parseFloat(data.costCum || 0).toFixed(2));
+            setText('card-ratio', data.compRatio + 'x');
+
             // Gauge setup
-            document.getElementById('gauge-pct').textContent = data.pct + '%';
-            document.getElementById('gauge-comp-lbl').textContent = data.compRatio + 'x';
-            
+            setText('gauge-pct', data.pct + '%');
+            setText('gauge-comp-lbl', data.compRatio + 'x');
+
             // Timeline
             renderMilestones();
-            
+
             // SVG Line Chart
             drawSavingsChart();
-            window.addEventListener('resize', drawSavingsChart);
-            
+            window.addEventListener('resize', debounce(drawSavingsChart, 120));
+
             // Circular Gauge Trigger
             drawGauge();
             
@@ -803,43 +849,71 @@
         });
         
         // Gauge drawing helper
+        let _gaugeRunning = false;
         function drawGauge() {
-            const pct = window.TOKENSO_DATA.pct;
+            const pct = Math.max(0, Math.min(100, window.TOKENSO_DATA.pct));
             const bar = document.getElementById('gauge-bar');
-            if (!bar) return;
-            
+            if (!bar || _gaugeRunning) return;
+            _gaugeRunning = true;
+
             const circumference = 2 * Math.PI * 80;
             const offset = circumference - (pct / 100) * circumference;
-            
-            setTimeout(() => {
+            bar.setAttribute('aria-label', `Compression ratio gauge: ${pct}% saved`);
+            bar.setAttribute('role', 'img');
+
+            requestAnimationFrame(() => {
                 bar.style.strokeDashoffset = offset;
-            }, 100);
+                _gaugeRunning = false;
+            });
         }
-        
-        // Milestones timeline renderer
+
+        // Milestones timeline renderer — uses a DocumentFragment to avoid the
+        // per-iteration reflow cost of concatenating innerHTML strings.
         function renderMilestones() {
             const milestones = window.TOKENSO_DATA.milestones;
             const container = document.getElementById('timeline-container');
+            if (!container) return;
+
+            container.textContent = '';
             if (!milestones || milestones.length === 0) {
-                container.innerHTML = `<div style="text-align:center;padding:30px 10px;color:var(--text-dim);font-size:13px;">No memory milestones recorded. Save one using <code>tokenso save "Milestone text"</code></div>`;
+                const empty = document.createElement('div');
+                empty.style.cssText = 'text-align:center;padding:30px 10px;color:var(--text-dim);font-size:13px;';
+                empty.innerHTML = 'No memory milestones recorded. Save one using <code>tokenso save "Milestone text"</code>';
+                container.appendChild(empty);
                 return;
             }
-            
-            let html = '';
-            // reverse array to show newest milestones first
+
             const reversed = [...milestones].reverse();
+            const frag = document.createDocumentFragment();
             reversed.forEach((ms, idx) => {
-                html += `
-                <div class="timeline-item">
-                    <div class="timeline-dot"></div>
-                    <div class="timeline-card">
-                        <div class="timeline-card-header">Milestone #${reversed.length - idx}</div>
-                        <div style="line-height: 1.4;">${ms}</div>
-                    </div>
-                </div>
-                `;
+                const num = reversed.length - idx;
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.setAttribute('role', 'listitem');
+                item.setAttribute('aria-label', `Milestone ${num}: ${ms}`);
+
+                const dot = document.createElement('div');
+                dot.className = 'timeline-dot';
+
+                const card = document.createElement('div');
+                card.className = 'timeline-card';
+
+                const header = document.createElement('div');
+                header.className = 'timeline-card-header';
+                header.textContent = `Milestone #${num}`;
+
+                const body = document.createElement('div');
+                body.style.lineHeight = '1.4';
+                body.textContent = String(ms);
+
+                card.appendChild(header);
+                card.appendChild(body);
+                item.appendChild(dot);
+                item.appendChild(card);
+                frag.appendChild(item);
             });
-            container.innerHTML = html;
+            container.setAttribute('role', 'list');
+            container.appendChild(frag);
         }
         
         // ROI Simulator engine
@@ -879,16 +953,27 @@
             document.getElementById('roi-server').textContent = '🖥️ Equivalent to ' + VPSMonths.toLocaleString() + ' months of modern VPS hosting paid off!';
         }
         
-        // SVG Spline Line Chart drawing helper
+        // SVG Spline Line Chart drawing helper. Memoizes on
+        // (history, width) so resize events that don't change geometry skip
+        // re-render entirely. The dashed accent path overlays the solid line
+        // so colorblind users can still tell trend strokes apart.
+        let _chartMemo = '';
         function drawSavingsChart() {
             const history = window.TOKENSO_DATA.history;
             const container = document.getElementById('chart-container');
+            if (!container) return;
             if (!history || history.length === 0) {
                 container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px;">No historical runs recorded. Run <code>tokenso save</code> to track.</div>`;
+                _chartMemo = '';
                 return;
             }
-            
+
             const width = container.clientWidth || 550;
+            if (width === 0) return;  // hidden container — skip silently
+
+            const memoKey = history.join(',') + '|' + width;
+            if (memoKey === _chartMemo) return;
+            _chartMemo = memoKey;
             const height = 180;
             const margin = { top: 20, right: 30, bottom: 25, left: 45 };
             
@@ -956,6 +1041,8 @@
                 
                 <!-- Line path outline -->
                 <path d="${pathD}" fill="none" stroke="var(--cyan)" stroke-width="3.5" filter="url(#shadow)" stroke-linecap="round"></path>
+                <!-- Dashed accent for non-color trend discrimination -->
+                <path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1" stroke-dasharray="4 4" stroke-linecap="round"></path>
             `;
             
             // Add interactive markers
@@ -972,32 +1059,45 @@
             const dots = container.querySelectorAll('.chart-point');
             const tooltip = document.getElementById('chart-tooltip');
             
+            const showTooltip = (target) => {
+                const idx = target.getAttribute('data-idx');
+                const val = parseInt(target.getAttribute('data-val'));
+                const cost = ((val * models[selectedModel].rate) / 1000000).toFixed(4);
+
+                tooltip.style.opacity = '1';
+                tooltip.innerHTML = `
+                    <div style="font-weight:600;color:var(--cyan);margin-bottom:2px;font-family:var(--font-sans);">Run #${parseInt(idx)+1}</div>
+                    <div style="font-size:12px;font-family:var(--font-sans);">Saved: <span style="color:var(--emerald);font-weight:600;">${val.toLocaleString()}</span> tokens</div>
+                    <div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);">Value: $${cost}</div>
+                `;
+
+                const rect = target.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                tooltip.style.left = (rect.left - containerRect.left + 12) + 'px';
+                tooltip.style.top = (rect.top - containerRect.top - 55) + 'px';
+
+                target.setAttribute('r', '7.5');
+                target.style.cursor = 'pointer';
+            };
+            const hideTooltip = (target) => {
+                tooltip.style.opacity = '0';
+                target.setAttribute('r', '5');
+            };
+
             dots.forEach(dot => {
-                dot.addEventListener('mouseenter', (e) => {
-                    const idx = e.target.getAttribute('data-idx');
-                    const val = parseInt(e.target.getAttribute('data-val'));
-                    const cost = ((val * models[selectedModel].rate) / 1000000).toFixed(4);
-                    
-                    tooltip.style.opacity = '1';
-                    tooltip.innerHTML = `
-                        <div style="font-weight:600;color:var(--cyan);margin-bottom:2px;font-family:var(--font-sans);">Run #${parseInt(idx)+1}</div>
-                        <div style="font-size:12px;font-family:var(--font-sans);">Saved: <span style="color:var(--emerald);font-weight:600;">${val.toLocaleString()}</span> tokens</div>
-                        <div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);">Value: $${cost}</div>
-                    `;
-                    
-                    const rect = e.target.getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-                    tooltip.style.left = (rect.left - containerRect.left + 12) + 'px';
-                    tooltip.style.top = (rect.top - containerRect.top - 55) + 'px';
-                    
-                    e.target.setAttribute('r', '7.5');
-                    e.target.style.cursor = 'pointer';
-                });
-                
-                dot.addEventListener('mouseleave', (e) => {
-                    tooltip.style.opacity = '0';
-                    e.target.setAttribute('r', '5');
-                });
+                // Make every point keyboard-focusable so non-pointer users can
+                // still inspect each run via Tab + arrow keys.
+                dot.setAttribute('tabindex', '0');
+                dot.setAttribute('role', 'button');
+                dot.setAttribute('aria-label',
+                    `Run ${parseInt(dot.getAttribute('data-idx')) + 1}: ${parseInt(dot.getAttribute('data-val')).toLocaleString()} tokens saved`);
+
+                dot.addEventListener('mouseenter', (e) => showTooltip(e.target));
+                dot.addEventListener('mouseleave', (e) => hideTooltip(e.target));
+                dot.addEventListener('focus',      (e) => showTooltip(e.target));
+                dot.addEventListener('blur',       (e) => hideTooltip(e.target));
+                // Pointer events work on both mouse and touch.
+                dot.addEventListener('pointerdown',(e) => showTooltip(e.target));
             });
         }
     </script>

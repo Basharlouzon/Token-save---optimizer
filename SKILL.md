@@ -17,8 +17,8 @@ As an AI agent, you must strictly follow these rules when this skill is active o
 - **Targeted viewing**: Once a file is identified, read *only the specific line ranges* you need. NEVER load a 2,000-line file into context just to read a single function. 
 
 ## 2. Smart Initialization
-- **Use the Repo Map**: If you need to understand the project structure, do not run `ls -R` or `find`. Instead, execute `tokenso map` or run `bash scripts/init-smart-search.sh .`.
-- **Read the Map**: This script generates an ultra-compressed tree structure at `.ai-memory/repo-map.txt`. Read this tiny file instead of manually exploring the workspace.
+- **Use the Repo Map**: If you need to understand the project structure, do not run `ls -R` or `find`. Run `tokenso map` (preferred — works from any directory on PATH). If `tokenso` is not on PATH, fall back to `bash .ai-memory/scripts/init-smart-search.sh .` from the project root.
+- **Read the Map**: This generates an ultra-compressed tree structure at `.ai-memory/repo-map.txt`. Read this tiny file instead of manually exploring the workspace.
 
 ## 3. The Memory Refresh Protocol (Prevent Duplication & Looping)
 - **Check State**: Before making any significant architectural decisions or writing new features, ALWAYS check if `.ai-memory/state.md` exists. If it does, read it (or run `tokenso state`). This is your core long-term memory.
@@ -28,13 +28,36 @@ As an AI agent, you must strictly follow these rules when this skill is active o
   - `!` Key findings or architectural rules discovered.
 - **Context Pruning**: After writing to `.ai-memory/state.md`, explicitly acknowledge in your thoughts that you are offloading previous raw context and only relying on the compressed memory. If you detect that you are repeating the same failed command or idea, **STOP**, update the memory state, and ask the user for clarification.
 
+### `state.md` example
+
+This is the exact format `tokenso save` reads and writes. Use it verbatim — do not invent new sections.
+
+```markdown
+# AI Memory State
+
+## Completed Tasks
+- [x] Initialized Tokenso smart search memory
+- [x] Implemented auth flow with JWT refresh tokens
+
+## Next Actions
+- [ ] Wire `/api/logout` to invalidate refresh tokens
+- [ ] Add e2e test for the expired-token redirect
+
+## Key Context & Architecture
+! Refresh tokens live in httpOnly cookies, not localStorage.
+! `useAuth()` is the single source of truth — do not read `req.user` directly in components.
+```
+
 ## 4. Cross-Agent Compatibility
-- If requested by the user, you can inject these memory-saving rules into other agents' configurations (like Cline, Roo, or Claude Code) by running:
-  `bash scripts/apply-cross-rules.sh <project_directory>`
+- If requested by the user, you can inject these memory-saving rules into other agents' configurations (like Cline, Roo, or Claude Code) by running the bundled script with a project directory argument:
+  ```bash
+  bash scripts/apply-cross-rules.sh .            # current project
+  bash scripts/apply-cross-rules.sh ../other-app # different project
+  ```
 
 ## Output Format
-When you update memory or prune context, output a brief summary to the user:
-```markdown
-> [!TIP]
-> **Tokenso Optimized**: Condensed insights into `.ai-memory/state.md` and pruned immediate context to save tokens.
+When you update memory or prune context, output a single-line summary to the user, e.g.:
+
+```
+✓ Tokenso: condensed insights into .ai-memory/state.md and pruned immediate context.
 ```
