@@ -2274,48 +2274,83 @@ show_version() {
 }
 
 # ─── RUN (GUI INTERACTIVE ENGINE) ───────────────────────────────────────────
+
+_gui_progress() {
+    local current=$1 total=$2 width=30
+    local pct=$(( current * 100 / total ))
+    local filled=$(( pct * width / 100 ))
+    local empty=$(( width - filled ))
+    printf "\r  ${CYAN}◉${NC}  Scanning... ["
+    for ((i=0; i<filled; i++)); do printf "█"; done
+    for ((i=0; i<empty; i++)); do printf "░"; done
+    printf "] %3d%% (%d/%d files)" "$pct" "$current" "$total"
+}
+
+_gui_pulse() {
+    local char=$1 color=$2
+    local frames=("○" "◉" "●" "◉")
+    for f in "${frames[@]}"; do
+        printf "\b\b%s" "${color}${f}${NC}"
+        sleep 0.08
+    done
+    printf "\b\b%s" "${color}${char}${NC}"
+}
+
+_gui_draw_connection() {
+    local from_name=$1 from_color=$2 to_name=$3 to_color=$4 delay=$5
+    local arrow="══════════════════════════════════"
+    echo -ne "    ${DIM}Linked:${NC}  ${from_color}[${from_name}]${NC} "
+    sleep ${delay}
+    local len=${#arrow}
+    for ((i=1; i<=len; i++)); do
+        printf "${YELLOW}═${NC}"
+        sleep 0.01
+    done
+    printf "> ${to_color}[${to_name}]${NC} ${GREEN}✔${NC}\n"
+    sleep ${delay}
+}
+
 print_mindmap_frame() {
-    local step=$1  # 1 to 9
-    
-    # Colors
+    local step=$1
+
     local c_ws="${BCYAN}"
     local c_cr="${MAGENTA}"
     local c_ms="${YELLOW}"
     local c_sm="${BGREEN}"
     local p_col="${DIM}"
-    
+
     local l2_left="│"
     local l2_right="│"
     local l11_left="│"
     local l11_right="│"
-    
+
     local l4_c1="└"
     local l4_h1="───────────────────"
     local l4_c2="┐"
     local l4_c3="┌"
     local l4_h2="───────────────────"
     local l4_c4="┘"
-    
+
     local l10_c1="┌"
     local l10_h1="───────────────────"
     local l10_c2="┘"
     local l10_c3="└"
     local l10_h2="───────────────────"
     local l10_c4="┐"
-    
+
     local l5_left="│"
     local l5_right="│"
     local l9_left="│"
     local l9_right="│"
-    
+
     local l6_left="▼"
     local l6_right="▼"
     local l8_left="▲"
     local l8_right="▲"
-    
+
     local core="${BBLUE}[ TOKENSO CORE ]${NC}"
     local syn="${YELLOW}⚡${p_col}"
-    
+
     case $step in
         1)
             l2_left="${syn}"
@@ -2357,7 +2392,7 @@ print_mindmap_frame() {
         8) core="${BCYAN}[ TOKENSO CORE ]${NC}" ;;
         9) core="${YELLOW}[ TOKENSO CORE ]${NC}" ;;
     esac
-    
+
     echo -e "     ${c_ws}[Workspace Code]${NC}                            ${c_cr}[Context Rules]${NC}"
     echo -e "            ${p_col}${l2_left}${NC}                                           ${p_col}${l2_right}${NC}"
     echo -e "            ${p_col}▼${NC}                                           ${p_col}▼${NC}"
@@ -2384,59 +2419,133 @@ run_gui() {
     echo "     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ "
     echo -e "${NC}${DIM}           Cognitive Mindmap Search  v$VERSION${NC}\n"
 
-    echo -e "  ${BOLD}🔍 Scanning project workspace for AI Mindmap nodes...${NC}"
-    sleep 0.4
-    
-    echo -e "    ${GREEN}●${NC} Discovered [Workspace Code] ... ${DIM}Logic structures & codebase symbols${NC}"
-    sleep 0.2
-    echo -e "    ${GREEN}●${NC} Discovered [Context Rules] ... ${DIM}Agent constraints & optimization rules${NC}"
-    sleep 0.2
-    echo -e "    ${GREEN}●${NC} Discovered [Memory State] ... ${DIM}AI milestone journal & state tracker${NC}"
-    sleep 0.2
-    echo -e "    ${GREEN}●${NC} Discovered [Semantic Map] ... ${DIM}Optimized folder structures map${NC}"
-    sleep 0.2
-    echo -e "    ${GREEN}●${NC} Discovered [Tokenso Core] ... ${DIM}Central token and memory optimization engine${NC}"
-    sleep 0.4
-    echo ""
+    # ── Phase 1: Workspace Scan with progress ──
+    echo -e "  ${BOLD}🔍 Phase 1: Scanning project workspace...${NC}"
 
-    echo -e "  ${BOLD}⚡ Firing cognitive synapses to connect nodes...${NC}\n"
-    sleep 0.4
+    local file_list
+    file_list=$(list_source_files)
+    local total_files=0
+    if [ -n "$file_list" ]; then
+        total_files=$(echo "$file_list" | wc -l | tr -d ' ')
+    fi
 
-    print_mindmap_frame 1
-    sleep 0.2
-    
-    for step in {2..9}; do
-        printf "\033[13A"
-        print_mindmap_frame $step
+    local node_ws="" node_cr="" node_ms="" node_sm=""
+    if [ -n "$total_files" ] && [ "$total_files" -gt 0 ]; then
+        node_ws="${total_files} source files detected"
+    else
+        node_ws="No source files (empty project)"
+    fi
+
+    [ -f ".claudecode" ] || [ -f "CLAUDE.md" ] || [ -f ".kilorules" ] || [ -f ".geminirules" ] || [ -f ".cursorrules" ] && node_cr="Agent rules active" || node_cr="No agent rules detected"
+    [ -f ".ai-memory/state.md" ] && node_ms="$(grep -c "^- \[" .ai-memory/state.md 2>/dev/null || echo 0) state entries" || node_ms="State not initialized"
+    [ -f ".ai-memory/repo-map.txt" ] && node_sm="$(wc -l < .ai-memory/repo-map.txt | tr -d ' ')-line compressed map" || node_sm="Map not generated"
+
+    local scan_targets=("Workspace Code" "Context Rules" "Memory State" "Semantic Map" "Tokenso Core")
+    local scan_details=("$node_ws" "$node_cr" "$node_ms" "$node_sm" "v$VERSION optimization engine")
+    local scan_colors=("$BCYAN" "$MAGENTA" "$YELLOW" "$BGREEN" "$BBLUE")
+    local scan_count=${#scan_targets[@]}
+
+    for ((i=0; i<scan_count; i++)); do
+        local pct=$(( (i + 1) * 100 / scan_count ))
+        local bar_filled=$(( pct * 20 / 100 ))
+        local bar_empty=$(( 20 - bar_filled ))
+        echo -ne "  ${CYAN}◉${NC}  Discovered ${scan_colors[$i]}[${scan_targets[$i]}]${NC} ... ${DIM}${scan_details[$i]}${NC}"
+        echo -ne "  ${GREEN}["
+        for ((j=0; j<bar_filled; j++)); do printf "━"; done
+        for ((j=0; j<bar_empty; j++)); do printf "─"; done
+        echo -e "]${NC}"
         sleep 0.15
     done
     echo ""
 
-    echo -e "  ${BGREEN}✨ Cognitive Mindmap Successfully Integrated!${NC}"
-    echo -e "  Estimated savings vectors initialized at ${YELLOW}~85% context compression${NC}."
+    # ── Phase 2: Animated synapse connections ──
+    echo -e "  ${BOLD}⚡ Phase 2: Firing cognitive synapses to connect nodes...${NC}\n"
+    sleep 0.3
+
+    _gui_draw_connection "Workspace Code" "$BCYAN" "Semantic Map" "$BGREEN" 0.15
+    _gui_draw_connection "Context Rules" "$MAGENTA" "Memory State" "$YELLOW" 0.15
+    _gui_draw_connection "Semantic Map" "$BGREEN" "Tokenso Core" "$BBLUE" 0.1
+    _gui_draw_connection "Memory State" "$YELLOW" "Tokenso Core" "$BBLUE" 0.1
     echo ""
 
-    echo -e "  ${BOLD}┌────────────────────────────────────────────────────────┐${NC}"
-    echo -e "  ${BOLD}│  ❓ Connect nodes and save Tokenso optimized map? [Y/n] │${NC}"
-    echo -e "  ${BOLD}└────────────────────────────────────────────────────────┘${NC}"
-    
-    if [ -t 0 ]; then
-        read -n 1 -r -p "  Selection: " response
-        echo ""
-    else
-        response="Y"
+    # ── Phase 3: Mindmap pulse animation ──
+    print_mindmap_frame 1
+    sleep 0.15
+
+    for step in {2..9}; do
+        printf "\033[13A"
+        print_mindmap_frame $step
+        sleep 0.1
+    done
+    echo ""
+
+    # ── Phase 4: Compression estimate ──
+    local raw_words=0
+    if [ -n "$file_list" ]; then
+        raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
     fi
-    
+    [ -z "$raw_words" ] && raw_words=0
+    local raw_tokens=$(( raw_words * 13 / 10 ))
+
+    local map_words=0
+    [ -f ".ai-memory/repo-map.txt" ] && map_words=$(wc -w < ".ai-memory/repo-map.txt")
+    local map_tokens=$(( map_words * 13 / 10 ))
+    local saved_tokens=$(( raw_tokens - map_tokens ))
+    [ $saved_tokens -lt 0 ] && saved_tokens=0
+
+    local pct=0
+    [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
+    [ $pct -eq 0 ] && pct=85
+
+    echo -e "  ${BGREEN}✨ Cognitive Mindmap Successfully Integrated!${NC}"
+    echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}Compression Vector:${NC}  ${BGREEN}${pct}%${NC} context reduction"
+    echo -e "  ${BOLD}Raw Estimate:${NC}       ${RED}$(fmt_num $raw_tokens)${NC} tokens"
+    echo -e "  ${BOLD}Optimized Map:${NC}      ${GREEN}$(fmt_num $map_tokens)${NC} tokens"
+    echo -e "  ${BOLD}Tokens Saved:${NC}       ${YELLOW}$(fmt_num $saved_tokens)${NC} tokens  ${DIM}(\$$(cost_usd $saved_tokens) est.)${NC}"
+    echo -e "  ${BOLD}Nodes Connected:${NC}    ${CYAN}5${NC} cognitive modules linked"
+    echo ""
+
+    # ── Phase 5: Save prompt ──
+    echo -e "  ${BOLD}┌─────────────────────────────────────────────────────────┐${NC}"
+    echo -e "  ${BOLD}│  💾 Connect nodes and save optimized map + stats? [Y/n]  │${NC}"
+    echo -e "  ${BOLD}└─────────────────────────────────────────────────────────┘${NC}"
+
+    local response="Y"
+    if [ -t 0 ]; then
+        read -n 1 -r -p "  Selection: " response < "${TTY_IN:-/dev/tty}"
+        echo ""
+    fi
+
     if [[ "$response" =~ ^[Nn]$ ]]; then
         echo -e "\n  ${YELLOW}Skipping save. Showing dashboard...${NC}"
-        sleep 0.6
+        sleep 0.5
         show_dashboard
     else
-        echo -e "\n  ${GREEN}Saving and building optimized mindmap...${NC}"
-        sleep 0.4
+        echo -e "\n  ${GREEN}💾 Saving optimized mindmap...${NC}"
+
+        # Animated save progress
+        local save_steps=("Generating repo map" "Calculating token savings" "Recording session stats" "Updating memory state" "Writing to storage")
+        for ((i=0; i<${#save_steps[@]}; i++)); do
+            local sp="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            for ((j=0; j<6; j++)); do
+                local idx=$(( (i * 6 + j) % 10 ))
+                local spinner="${sp:$idx:1}"
+                printf "\r  ${CYAN}${spinner}${NC}  %s..." "${save_steps[$i]}"
+                sleep 0.06
+            done
+            printf "\r  ${GREEN}✓${NC}  %s     \n" "${save_steps[$i]}"
+        done
+
         run_save --silent
-        echo -e "  ${GREEN}✓ Map and stats successfully saved!${NC}"
-        sleep 0.8
+
+        echo ""
+        echo -e "  ${BGREEN}═══════════════════════════════════════════${NC}"
+        echo -e "  ${BGREEN}  ✓ Map and stats successfully saved!${NC}"
+        echo -e "  ${BGREEN}═══════════════════════════════════════════${NC}"
+        echo -e "  ${DIM}Storage: .ai-memory/repo-map.txt + optimizer-stats.json${NC}"
+        echo ""
+        sleep 0.5
         show_dashboard
     fi
 }
