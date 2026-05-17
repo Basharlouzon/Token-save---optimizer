@@ -5,13 +5,32 @@ description: "You MUST use this before any creative work — creating features, 
 
 # Brainstorming Ideas Into Designs
 
-Turn ideas into approved designs through short, focused dialogue. The terminal state is invoking **writing-plans**; never jump straight to implementation skills.
+Turn ideas into approved designs through short, focused dialogue. The terminal state is a committed, self-reviewed design spec ready for implementation planning.
 
 ## Hard gate
 
 <HARD-GATE>
-No code, no scaffolding, no implementation skills until a design is presented AND the user has explicitly approved it. This applies regardless of perceived simplicity. A todo list, a one-line config change, a "trivial" utility — all of them get a design. The design can be three sentences for truly small work, but it must exist and be approved.
+No code, no scaffolding, no implementation until a design is presented AND the user has explicitly approved it. This applies regardless of perceived simplicity. A todo list, a one-line config change, a "trivial" utility — all of them get a design. The design can be three sentences for truly small work, but it must exist and be approved.
 </HARD-GATE>
+
+## Rapid Mode (Trivial Changes)
+
+For changes that are genuinely trivial (estimated < 5 lines, single-file, no architectural impact):
+
+1. State the change in one sentence.
+2. Ask: "This is a trivial change — proceed directly?"
+3. If yes, implement. If no, fall back to the full flow.
+
+**Do not abuse rapid mode.** When in doubt, use the full flow.
+
+## Scope Estimation Heuristic
+
+Before diving in, gauge scope:
+
+- **Trivial** (< 5 lines, single location) → Rapid mode
+- **Small** (1 function or component, < 50 lines) → Abbreviated flow (3-sentence design → approval → implement)
+- **Medium** (multiple files, new feature) → Full flow below
+- **Large** (new subsystem, cross-cutting concern) → Decompose first, then full flow per sub-project
 
 ## Checklist
 
@@ -23,10 +42,10 @@ Create one task per item and complete in order:
 4. **Ask clarifying questions** — one per message, prefer multiple-choice, focus on purpose / constraints / success criteria.
 5. **Propose 2–3 approaches** with trade-offs. Lead with your recommendation and explain why.
 6. **Present the design in sections.** Scale each section to its complexity. Get approval after each section before moving on.
-7. **Write the spec** to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (or the user's preferred location). Commit it.
+7. **Write the spec** to `docs/specs/YYYY-MM-DD-<topic>-design.md` (or the user's preferred location). Commit it.
 8. **Self-review the spec** — fix inline, no second pass needed. See [Spec self-review](#spec-self-review).
 9. **Ask the user to review** the committed spec file. Wait for approval. If they request changes, edit and re-run step 8.
-10. **Hand off to writing-plans.** Only `writing-plans`. Not `frontend-design`, not `mcp-builder`, not anything else.
+10. **Hand off to implementation** — only after explicit approval.
 
 ## Process flow
 
@@ -45,7 +64,8 @@ digraph brainstorming {
     "Write spec" [shape=box];
     "Self-review\n(fix inline)" [shape=box];
     "User reviews spec?" [shape=diamond];
-    "Invoke writing-plans" [shape=doublecircle];
+    "Checkpoint to Tokenso" [shape=box];
+    "Implement" [shape=doublecircle];
 
     "Explore context" -> "Scope OK?";
     "Scope OK?" -> "Decompose & pick one" [label="no"];
@@ -62,9 +82,20 @@ digraph brainstorming {
     "Write spec" -> "Self-review\n(fix inline)";
     "Self-review\n(fix inline)" -> "User reviews spec?";
     "User reviews spec?" -> "Write spec" [label="changes"];
-    "User reviews spec?" -> "Invoke writing-plans" [label="approved"];
+    "User reviews spec?" -> "Checkpoint to Tokenso" [label="approved"];
+    "Checkpoint to Tokenso" -> "Implement";
 }
 ```
+
+## Design Anti-Patterns Checklist
+
+Watch for these traps during design:
+
+- **Over-engineering** — adding abstraction layers or extensibility points that aren't needed yet.
+- **Scope creep** — the design keeps growing beyond the original request. YAGNI.
+- **Premature abstraction** — creating interfaces or base classes for a single implementation.
+- **Unknown unknowns** — if you can't explain how a part works, say so. Don't hand-wave.
+- **Copy-paste design** — importing patterns from other projects without adapting to this codebase's conventions.
 
 ## Asking clarifying questions
 
@@ -114,7 +145,17 @@ After writing, look at the spec with fresh eyes and fix inline:
 
 Then prompt the user:
 
-> Spec written and committed to `<path>`. Please review it and let me know if you want changes before we start the implementation plan.
+> Spec written and committed to `<path>`. Please review it and let me know if you want changes before we start implementation.
+
+## Checkpoint to Tokenso
+
+After design approval, checkpoint the decision:
+
+```bash
+tokenso save "Approved design: <topic>"
+```
+
+This records the milestone in `.ai-memory/state.md` and updates stats.
 
 ## Visual companion
 

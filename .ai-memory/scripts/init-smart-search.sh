@@ -2,6 +2,8 @@
 # init-smart-search.sh
 # Generates a highly compressed directory map to save AI token usage.
 
+set -euo pipefail
+
 TARGET_DIR="${1:-.}"
 MEMORY_DIR="$TARGET_DIR/.ai-memory"
 
@@ -47,13 +49,16 @@ EST_TOKENS=$(( WORDS * 4 / 3 ))
 echo "Done! The repository map is ready at $MEMORY_DIR/repo-map.txt (Estimated tokens: $EST_TOKENS)."
 echo "Agents should read this file instead of manually exploring the workspace."
 
-# Hook to update Tokenso stats silently
-if [ -z "$TOKENSO_INTERNAL" ]; then
+# Hook to update Tokenso stats silently. Warn-and-skip if no binary is reachable
+# instead of letting `command not found` propagate up the caller chain.
+if [ -z "${TOKENSO_INTERNAL:-}" ]; then
   if command -v tokenso &>/dev/null; then
-    TOKENSO_INTERNAL=1 tokenso save --silent
-  elif [ -f "./bin/tokenso" ]; then
-    TOKENSO_INTERNAL=1 ./bin/tokenso save --silent
-  elif [ -f "../bin/tokenso" ]; then
-    TOKENSO_INTERNAL=1 ../bin/tokenso save --silent
+    TOKENSO_INTERNAL=1 tokenso save --silent || true
+  elif [ -x "./bin/tokenso" ]; then
+    TOKENSO_INTERNAL=1 ./bin/tokenso save --silent || true
+  elif [ -x "../bin/tokenso" ]; then
+    TOKENSO_INTERNAL=1 ../bin/tokenso save --silent || true
+  else
+    echo "Note: tokenso CLI not found on PATH — skipping stats update." >&2
   fi
 fi

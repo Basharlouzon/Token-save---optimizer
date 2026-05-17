@@ -5,32 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tokenso — Context Optimizer Dashboard</title>
     
-    <!-- Outfit & Fira Code Fonts — `display=swap` ensures the page renders
-         immediately with the system-font fallback if the CDN is unreachable. -->
+    <!-- Outfit & Fira Code Fonts (with system-font fallback so the dashboard
+         renders fully even offline). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
           rel="stylesheet"
           media="all"
           onerror="this.media='print'">
-    
+
     <script>
     window.TOKENSO_DATA = {
-        projectName: "loving-hofstadter-eefd20",
-        dateExported: "2026-05-17 16:15",
+        projectName: "claudememory",
+        dateExported: "2026-05-17 17:52",
         activeAgents: "Claude Code Claude Code (CLAUDE.md) Kilo Gemini CLI / Antigravity Antigravity ✓ global",
-        filesCount: 9,
-        rawTokens: 19098,
-        mapTokens: 23,
-        savedTokens: 19075,
+        filesCount: 15,
+        rawTokens: 24484,
+        mapTokens: 24,
+        savedTokens: 24460,
         pct: 99,
-        compRatio: "830.3",
-        costSaved: "0.0572",
-        sessions: 6,
-        cumulativeSaved: 114078,
-        costCum: "0.3422",
-        history: [18951,18951,18951,19075,19075,19075],
-        milestones: ["test"]
+        compRatio: "1020.1",
+        costSaved: "0.0733",
+        sessions: 12,
+        cumulativeSaved: 274693,
+        costCum: "0.8240",
+        history: [18951,23885,23885,23885,23885,24460,24460,24460,24460,24460],
+        milestones: ["test", "tes", "update flag"]
     };
     </script>
     <style>
@@ -751,8 +751,6 @@
     
     <!-- JavaScript Interaction Engine -->
     <script>
-        // Normalize and validate TOKENSO_DATA so missing/malformed input renders
-        // a friendly empty state rather than throwing in the middle of init.
         function normalizeData(raw) {
             const d = raw && typeof raw === 'object' ? raw : {};
             const num = (v, fallback) => {
@@ -777,14 +775,10 @@
                 milestones:      Array.isArray(d.milestones) ? d.milestones : []
             };
         }
-
-        // Resize-debounce so dragging the window edge doesn't trigger a redraw
-        // per pixel and tank rendering on chart-heavy histories.
         function debounce(fn, ms) {
             let t;
             return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
         }
-
         const setText = (id, v) => {
             const el = document.getElementById(id);
             if (el) el.textContent = v;
@@ -794,42 +788,31 @@
             window.TOKENSO_DATA = normalizeData(window.TOKENSO_DATA);
             const data = window.TOKENSO_DATA;
 
-            // Populating raw metadata
             setText('dt-project', data.projectName);
             setText('dt-date', data.dateExported);
             setText('dt-files', data.filesCount);
             setText('dt-tools', data.activeAgents || 'None detected');
 
-            // Populate card values
             setText('card-sessions', data.sessions);
             setText('card-tokens', data.cumulativeSaved.toLocaleString());
             setText('card-savings', '$' + parseFloat(data.costCum || 0).toFixed(2));
             setText('card-ratio', data.compRatio + 'x');
 
-            // Gauge setup
             setText('gauge-pct', data.pct + '%');
             setText('gauge-comp-lbl', data.compRatio + 'x');
 
-            // Timeline
             renderMilestones();
-
-            // SVG Line Chart
             drawSavingsChart();
             window.addEventListener('resize', debounce(drawSavingsChart, 120));
-
-            // Circular Gauge Trigger
             drawGauge();
             
-            // ROI simulator initialization
             const sliderRuns = document.getElementById('slider-runs');
             const sliderTokens = document.getElementById('slider-tokens');
-            
-            // Set dynamic default range for tokens slider
-            if (data.savedTokens > 0) {
+
+            if (data.savedTokens > 0 && sliderTokens) {
                 sliderTokens.value = Math.min(Math.max(data.savedTokens, 1000), 100000);
             }
-            
-            // Handle model select clicks
+
             const modelButtons = document.querySelectorAll('.model-btn');
             modelButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -839,41 +822,32 @@
                     updateROI();
                 });
             });
-            
-            // Hook simulator sliders
-            sliderRuns.addEventListener('input', updateROI);
-            sliderTokens.addEventListener('input', updateROI);
-            
-            // Run initial update
+
+            if (sliderRuns) sliderRuns.addEventListener('input', updateROI);
+            if (sliderTokens) sliderTokens.addEventListener('input', updateROI);
             updateROI();
         });
-        
-        // Gauge drawing helper
+
         let _gaugeRunning = false;
         function drawGauge() {
             const pct = Math.max(0, Math.min(100, window.TOKENSO_DATA.pct));
             const bar = document.getElementById('gauge-bar');
             if (!bar || _gaugeRunning) return;
             _gaugeRunning = true;
-
             const circumference = 2 * Math.PI * 80;
             const offset = circumference - (pct / 100) * circumference;
             bar.setAttribute('aria-label', `Compression ratio gauge: ${pct}% saved`);
             bar.setAttribute('role', 'img');
-
             requestAnimationFrame(() => {
                 bar.style.strokeDashoffset = offset;
                 _gaugeRunning = false;
             });
         }
 
-        // Milestones timeline renderer — uses a DocumentFragment to avoid the
-        // per-iteration reflow cost of concatenating innerHTML strings.
         function renderMilestones() {
             const milestones = window.TOKENSO_DATA.milestones;
             const container = document.getElementById('timeline-container');
             if (!container) return;
-
             container.textContent = '';
             if (!milestones || milestones.length === 0) {
                 const empty = document.createElement('div');
@@ -882,7 +856,6 @@
                 container.appendChild(empty);
                 return;
             }
-
             const reversed = [...milestones].reverse();
             const frag = document.createDocumentFragment();
             reversed.forEach((ms, idx) => {
@@ -891,21 +864,16 @@
                 item.className = 'timeline-item';
                 item.setAttribute('role', 'listitem');
                 item.setAttribute('aria-label', `Milestone ${num}: ${ms}`);
-
                 const dot = document.createElement('div');
                 dot.className = 'timeline-dot';
-
                 const card = document.createElement('div');
                 card.className = 'timeline-card';
-
                 const header = document.createElement('div');
                 header.className = 'timeline-card-header';
                 header.textContent = `Milestone #${num}`;
-
                 const body = document.createElement('div');
                 body.style.lineHeight = '1.4';
                 body.textContent = String(ms);
-
                 card.appendChild(header);
                 card.appendChild(body);
                 item.appendChild(dot);
@@ -953,10 +921,7 @@
             document.getElementById('roi-server').textContent = '🖥️ Equivalent to ' + VPSMonths.toLocaleString() + ' months of modern VPS hosting paid off!';
         }
         
-        // SVG Spline Line Chart drawing helper. Memoizes on
-        // (history, width) so resize events that don't change geometry skip
-        // re-render entirely. The dashed accent path overlays the solid line
-        // so colorblind users can still tell trend strokes apart.
+        // SVG Spline Line Chart drawing helper (memoized on history+width)
         let _chartMemo = '';
         function drawSavingsChart() {
             const history = window.TOKENSO_DATA.history;
@@ -969,8 +934,7 @@
             }
 
             const width = container.clientWidth || 550;
-            if (width === 0) return;  // hidden container — skip silently
-
+            if (width === 0) return;
             const memoKey = history.join(',') + '|' + width;
             if (memoKey === _chartMemo) return;
             _chartMemo = memoKey;
@@ -1044,38 +1008,34 @@
                 <!-- Dashed accent for non-color trend discrimination -->
                 <path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1" stroke-dasharray="4 4" stroke-linecap="round"></path>
             `;
-            
-            // Add interactive markers
+
             points.forEach((pt, idx) => {
                 svgHtml += `
                 <circle cx="${pt.x}" cy="${pt.y}" r="5" fill="var(--bg)" stroke="var(--cyan)" stroke-width="2.5" class="chart-point" data-idx="${idx}" data-val="${pt.val}"></circle>
                 `;
             });
-            
+
             svgHtml += `</svg>`;
             container.innerHTML = svgHtml;
-            
-            // Add tooltip hover events
+
             const dots = container.querySelectorAll('.chart-point');
             const tooltip = document.getElementById('chart-tooltip');
-            
+            if (!tooltip) return;
+
             const showTooltip = (target) => {
                 const idx = target.getAttribute('data-idx');
                 const val = parseInt(target.getAttribute('data-val'));
                 const cost = ((val * models[selectedModel].rate) / 1000000).toFixed(4);
-
                 tooltip.style.opacity = '1';
                 tooltip.innerHTML = `
                     <div style="font-weight:600;color:var(--cyan);margin-bottom:2px;font-family:var(--font-sans);">Run #${parseInt(idx)+1}</div>
                     <div style="font-size:12px;font-family:var(--font-sans);">Saved: <span style="color:var(--emerald);font-weight:600;">${val.toLocaleString()}</span> tokens</div>
                     <div style="font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);">Value: $${cost}</div>
                 `;
-
                 const rect = target.getBoundingClientRect();
                 const containerRect = container.getBoundingClientRect();
                 tooltip.style.left = (rect.left - containerRect.left + 12) + 'px';
                 tooltip.style.top = (rect.top - containerRect.top - 55) + 'px';
-
                 target.setAttribute('r', '7.5');
                 target.style.cursor = 'pointer';
             };
@@ -1085,18 +1045,14 @@
             };
 
             dots.forEach(dot => {
-                // Make every point keyboard-focusable so non-pointer users can
-                // still inspect each run via Tab + arrow keys.
                 dot.setAttribute('tabindex', '0');
                 dot.setAttribute('role', 'button');
                 dot.setAttribute('aria-label',
                     `Run ${parseInt(dot.getAttribute('data-idx')) + 1}: ${parseInt(dot.getAttribute('data-val')).toLocaleString()} tokens saved`);
-
                 dot.addEventListener('mouseenter', (e) => showTooltip(e.target));
                 dot.addEventListener('mouseleave', (e) => hideTooltip(e.target));
                 dot.addEventListener('focus',      (e) => showTooltip(e.target));
                 dot.addEventListener('blur',       (e) => hideTooltip(e.target));
-                // Pointer events work on both mouse and touch.
                 dot.addEventListener('pointerdown',(e) => showTooltip(e.target));
             });
         }
