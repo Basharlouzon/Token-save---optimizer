@@ -8,7 +8,7 @@ TARGET_DIR="${1:-.}"
 
 # Bump this suffix whenever the rules text changes so updated rules re-apply
 # cleanly on existing checkouts instead of being skipped as "already present".
-MARKER_VERSION="v1"
+MARKER_VERSION="v2"
 
 RULES=$(cat << EOF
 
@@ -16,8 +16,9 @@ RULES=$(cat << EOF
 # TOKENSO CONTEXT OPTIMIZER RULES ($MARKER_VERSION)
 # ==========================================
 - **Smart Mode**: At the start of every session, run \`tokenso smart\` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use \`tokenso smart --json\` for machine-readable output.
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run \`ls -R\`. Instead, run \`tokenso map\` (or \`bash .ai-memory/scripts/init-smart-search.sh .\`) and read \`.ai-memory/repo-map.txt\`.
+- **Symbol Lookup First**: To locate a function/class/type, ALWAYS check \`.ai-memory/symbol-map.txt\` (or run \`tokenso symbols <name>\`) BEFORE opening files. Each entry is \`path:line<TAB>kind<TAB>name\` — jump straight to the line, do not read the whole file.
+- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search (\`tokenso search\`, \`tokenso symbols\`) to find filenames/symbols before reading. Only read specific line ranges required.
+- **Smart Init**: If you need to explore the project, do not run \`ls -R\`. Instead, run \`tokenso map\` (or \`bash .ai-memory/scripts/init-smart-search.sh .\`) and read \`.ai-memory/repo-map.txt\` + \`.ai-memory/symbol-map.txt\`.
 - **Memory Protocol**: Before acting, always read \`.ai-memory/state.md\`. Upon reaching a milestone or repeating actions, compress your current understanding into \`.ai-memory/state.md\` and explicitly command yourself to forget the prior raw context to save tokens.
 - **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
 EOF

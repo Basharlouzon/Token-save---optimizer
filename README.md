@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.5.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.6.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,18 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.6.0
+
+Symbol map — the biggest token-saving upgrade since the repo map itself.
+
+- **`.ai-memory/symbol-map.txt`** — One line per function/class/type: `path:line<TAB>kind<TAB>name`. Agents can now answer "where is `handleAuth`?" without reading any file. Built automatically by `tokenso map` and `tokenso smart`.
+- **`tokenso symbols [name]`** — New command to view/filter the symbol index from the terminal. `tokenso symbols drawGauge` shows every match with its file/line.
+- **Two extraction backends** — Universal Ctags when installed (40+ languages); portable awk regex fallback for JS/TS, Python, Bash, Go, Rust, Ruby. Capped at 800 symbols (`TOKENSO_SYMBOL_CAP`) so the map stays token-light.
+- **Agent rules bumped to v2** — The injected rules now include a "Symbol Lookup First" rule telling agents to check the symbol map BEFORE opening files. `apply-cross-rules.sh` re-injects automatically.
+- **Dashboard** — New "Indexed Symbols" stat in the project details bar.
+- **Smart report** — Adds `symbols: N` line and "Refreshed symbol map" action.
+- See [ADR-0004](docs/adr/0004-symbol-map.md).
 
 ## ✨ What's new in 2.5.1
 

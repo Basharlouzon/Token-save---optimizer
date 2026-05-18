@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.5.1"
+VERSION="2.6.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -835,15 +835,18 @@ generate_html_dashboard() {
         raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
     fi
     [ -z "$raw_words" ] && raw_words=0
-    
+
     local map_words=0
     [ -f ".ai-memory/repo-map.txt" ] && map_words=$(wc -w < ".ai-memory/repo-map.txt")
-    
+
+    local symbol_count=0
+    [ -f ".ai-memory/symbol-map.txt" ] && symbol_count=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
+
     local raw_tokens=$(( raw_words * 13 / 10 ))
     local map_tokens=$(( map_words * 13 / 10 ))
     local saved_tokens=$(( raw_tokens - map_tokens ))
     [ $saved_tokens -lt 0 ] && saved_tokens=0
-    
+
     local pct=0
     [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
     
@@ -914,6 +917,7 @@ generate_html_dashboard() {
         dateExported: "${date_exported}",
         activeAgents: "${active_agents}",
         filesCount: ${files_count},
+        symbolCount: ${symbol_count},
         rawTokens: ${raw_tokens},
         mapTokens: ${map_tokens},
         savedTokens: ${saved_tokens},
@@ -1598,6 +1602,10 @@ EOF
                 <span id="dt-files" style="font-family: var(--font-mono);"></span>
             </div>
             <div class="details-item">
+                <span>🔣 Indexed Symbols:</span>
+                <span id="dt-symbols" style="font-family: var(--font-mono); color: var(--emerald);"></span>
+            </div>
+            <div class="details-item">
                 <span>🤖 Detected Tools:</span>
                 <span id="dt-tools" style="color: var(--purple);"></span>
             </div>
@@ -1800,6 +1808,7 @@ EOF
                 dateExported:    d.dateExported    || '',
                 activeAgents:    d.activeAgents    || '',
                 filesCount:      num(d.filesCount, 0),
+                symbolCount:     num(d.symbolCount, 0),
                 rawTokens:       num(d.rawTokens, 0),
                 mapTokens:       num(d.mapTokens, 0),
                 savedTokens:     num(d.savedTokens, 0),
@@ -1829,6 +1838,7 @@ EOF
             setText('dt-project', data.projectName);
             setText('dt-date', data.dateExported);
             setText('dt-files', data.filesCount);
+            setText('dt-symbols', data.symbolCount > 0 ? data.symbolCount.toLocaleString() : '— (run `tokenso map`)');
             setText('dt-tools', data.activeAgents || 'None detected');
             setText('ft-version', data.version ? 'v' + data.version : 'v—');
 
@@ -2291,15 +2301,18 @@ run_stats() {
         raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
     fi
     [ -z "$raw_words" ] && raw_words=0
-    
+
     local map_words=0
     [ -f ".ai-memory/repo-map.txt" ] && map_words=$(wc -w < ".ai-memory/repo-map.txt")
-    
+
+    local symbol_count=0
+    [ -f ".ai-memory/symbol-map.txt" ] && symbol_count=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
+
     local raw_tokens=$(( raw_words * 13 / 10 ))
     local map_tokens=$(( map_words * 13 / 10 ))
     local saved_tokens=$(( raw_tokens - map_tokens ))
     [ $saved_tokens -lt 0 ] && saved_tokens=0
-    
+
     local pct=0
     [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
     
@@ -2432,9 +2445,32 @@ EOF
 }
 
 # ─── MAP (Folder Structure Visualizer) ─────────────────────────────────────
+_ensure_symbol_map() {
+    # Build the symbol map alongside the repo map. Best-effort; never fatal.
+    local sm_script=""
+    if [ -f "scripts/build-symbol-map.sh" ]; then
+        sm_script="scripts/build-symbol-map.sh"
+    elif [ -f ".ai-memory/scripts/build-symbol-map.sh" ]; then
+        sm_script=".ai-memory/scripts/build-symbol-map.sh"
+    else
+        # Pull the latest from master so existing installs gain symbol-map
+        # support on first `tokenso map` without needing a reinstall.
+        mkdir -p .ai-memory/scripts
+        curl -fsSL --connect-timeout 5 --max-time 30 \
+            "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/build-symbol-map.sh" \
+            -o .ai-memory/scripts/build-symbol-map.sh 2>/dev/null && {
+                chmod +x .ai-memory/scripts/build-symbol-map.sh
+                sm_script=".ai-memory/scripts/build-symbol-map.sh"
+            }
+    fi
+    if [ -n "$sm_script" ]; then
+        bash "$sm_script" . &>/dev/null || true
+    fi
+}
+
 run_map() {
     local map_file=".ai-memory/repo-map.txt"
-    
+
     if [ ! -f "$map_file" ]; then
         echo -e "${YELLOW}⚠️  Repository map does not exist yet.${NC}"
         echo -e "  ${BLUE}Generating new codebase map...${NC}"
@@ -2446,6 +2482,9 @@ run_map() {
         fi
         echo -e "  ${GREEN}✓ Map successfully generated!${NC}\n"
     fi
+
+    # Refresh symbol map opportunistically.
+    _ensure_symbol_map
 
     local bytes=$(wc -c < "$map_file" | tr -d ' ')
     local words=$(wc -w < "$map_file" | tr -d ' ')
@@ -2472,6 +2511,68 @@ run_map() {
         
         echo -e "  $colorized"
     done < "$map_file"
+    echo ""
+
+    # If the symbol map exists, print a one-line teaser so agents discover it.
+    local sym_file=".ai-memory/symbol-map.txt"
+    if [ -f "$sym_file" ]; then
+        local sym_count
+        sym_count=$(grep -cv '^#' "$sym_file" 2>/dev/null || echo 0)
+        if [ "$sym_count" -gt 0 ]; then
+            echo -e "  ${DIM}${CYAN}↳ Symbol map: ${sym_count} symbols at ${sym_file} — run \`tokenso symbols\` to view.${NC}\n"
+        fi
+    fi
+}
+
+# ─── SYMBOLS (function/class/type index) ──────────────────────────────────
+run_symbols() {
+    local sym_file=".ai-memory/symbol-map.txt"
+    local filter="${1:-}"
+
+    if [ ! -f "$sym_file" ]; then
+        echo -e "${YELLOW}⚠️  Symbol map not built yet. Generating...${NC}"
+        _ensure_symbol_map
+        if [ ! -f "$sym_file" ]; then
+            echo -e "${RED}❌ Could not build symbol map. Check scripts/build-symbol-map.sh.${NC}"
+            return 1
+        fi
+    fi
+
+    local total
+    total=$(grep -cv '^#' "$sym_file" 2>/dev/null || echo 0)
+
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🔣  Symbol Map — Function / Class / Type Index${NC}"
+    echo -e "  ${DIM}Total: $total symbols at $sym_file${NC}"
+    if [ -n "$filter" ]; then
+        echo -e "  ${DIM}Filter: '$filter'${NC}"
+    fi
+    echo -e "${BCYAN}======================================================${NC}\n"
+
+    # Print the header comments (provenance line), then the filtered body.
+    grep '^#' "$sym_file" | head -3
+    echo ""
+
+    if [ -n "$filter" ]; then
+        grep -v '^#' "$sym_file" | grep -i -- "$filter" | head -50 \
+            | awk -F'\t' -v c="$CYAN" -v p="$PURPLE" -v g="$GREEN" -v y="$YELLOW" -v n="$NC" '
+                { printf "  %s%s%s  %s%-6s%s  %s%s%s\n", c, $1, n, y, $2, n, g, $3, n }
+            '
+        local matched
+        matched=$(grep -v '^#' "$sym_file" | grep -ic -- "$filter")
+        echo ""
+        echo -e "  ${DIM}Showing $(if [ "$matched" -gt 50 ]; then echo "50 of $matched"; else echo "$matched"; fi) matches.${NC}"
+    else
+        # No filter: show first 40 to avoid wall of text.
+        grep -v '^#' "$sym_file" | head -40 \
+            | awk -F'\t' -v c="$CYAN" -v p="$PURPLE" -v g="$GREEN" -v y="$YELLOW" -v n="$NC" '
+                { printf "  %s%s%s  %s%-6s%s  %s%s%s\n", c, $1, n, y, $2, n, g, $3, n }
+            '
+        if [ "$total" -gt 40 ]; then
+            echo ""
+            echo -e "  ${DIM}… and $((total - 40)) more. Use ${CYAN}tokenso symbols <name>${DIM} to filter or ${CYAN}cat $sym_file${DIM} for the full list.${NC}"
+        fi
+    fi
     echo ""
 }
 
@@ -3291,8 +3392,20 @@ run_smart() {
         fi
         chmod +x .ai-memory/scripts/init-smart-search.sh
 
-        # Generate initial repo map
+        # Copy or download symbol-map script (optional companion).
+        if [ -f "scripts/build-symbol-map.sh" ]; then
+            cp scripts/build-symbol-map.sh .ai-memory/scripts/build-symbol-map.sh
+        else
+            curl -fsSL --connect-timeout 5 --max-time 30 \
+                "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/scripts/build-symbol-map.sh" \
+                -o .ai-memory/scripts/build-symbol-map.sh 2>/dev/null || true
+        fi
+        [ -f .ai-memory/scripts/build-symbol-map.sh ] && chmod +x .ai-memory/scripts/build-symbol-map.sh
+
+        # Generate initial repo + symbol maps.
         bash .ai-memory/scripts/init-smart-search.sh . &>/dev/null
+        [ -f .ai-memory/scripts/build-symbol-map.sh ] \
+            && bash .ai-memory/scripts/build-symbol-map.sh . &>/dev/null || true
 
         # Init stats
         cat > ".ai-memory/optimizer-stats.json" << EOF
@@ -3335,11 +3448,12 @@ EOF
                     cat >> "$cfg" << 'RULES'
 
 # ==========================================
-# TOKENSO CONTEXT OPTIMIZER RULES
+# TOKENSO CONTEXT OPTIMIZER RULES (v2)
 # ==========================================
 - **Smart Mode**: At the start of every session, run `tokenso smart` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use `tokenso smart --json` for machine-readable output.
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `tokenso map` (or `bash .ai-memory/scripts/init-smart-search.sh .`) and read `.ai-memory/repo-map.txt`.
+- **Symbol Lookup First**: To locate a function/class/type, ALWAYS check `.ai-memory/symbol-map.txt` (or run `tokenso symbols <name>`) BEFORE opening files. Each entry is `path:line<TAB>kind<TAB>name` — jump straight to the line, do not read the whole file.
+- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search (`tokenso search`, `tokenso symbols`) to find filenames/symbols before reading. Only read specific line ranges required.
+- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `tokenso map` and read `.ai-memory/repo-map.txt` + `.ai-memory/symbol-map.txt`.
 - **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
 - **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
 RULES
@@ -3376,6 +3490,23 @@ RULES
             _smart_action "Refreshed stale repo map"
         else
             _smart_issue "init-smart-search.sh missing — run 'tokenso install'"
+        fi
+    fi
+
+    # Build / refresh the symbol map alongside the repo map.
+    local sym_file=".ai-memory/symbol-map.txt"
+    local sym_stale=false
+    if [ ! -f "$sym_file" ]; then
+        sym_stale=true
+    elif $map_stale; then
+        sym_stale=true
+    fi
+    if $sym_stale; then
+        _ensure_symbol_map
+        if [ -f "$sym_file" ]; then
+            local sc
+            sc=$(grep -cv '^#' "$sym_file" 2>/dev/null || echo 0)
+            _smart_action "Refreshed symbol map (${sc} symbols)"
         fi
     fi
 
@@ -3469,6 +3600,8 @@ RULES
     [ -n "$file_list" ] && file_count=$(echo "$file_list" | wc -l | tr -d ' ')
     local map_lines=0
     [ -f "$map_file" ] && map_lines=$(wc -l < "$map_file" | tr -d ' ')
+    local sym_count=0
+    [ -f ".ai-memory/symbol-map.txt" ] && sym_count=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
     local cost_saved=$(cost_usd $saved_tokens)
     local cost_cum=$(cost_usd $next_saved)
     local active_tools="$tools"
@@ -3519,6 +3652,7 @@ RULES
   "cumulative_tokens": $next_saved,
   "cumulative_usd": $cost_cum,
   "map_lines": $map_lines,
+  "symbols": $sym_count,
   "watcher": "$watcher_status",
   "active_tools": "$active_tools",
   "actions_taken": $actions_json,
@@ -3542,6 +3676,7 @@ EOF
         echo "cumulative_tokens: $next_saved"
         echo "cumulative_usd: $cost_cum"
         echo "map_lines: $map_lines"
+        echo "symbols: $sym_count"
         echo "watcher: $watcher_status"
         echo "active_tools: $active_tools"
         echo ""
@@ -3613,6 +3748,10 @@ case "$1" in
     smart)
         shift
         run_smart "$@"
+        ;;
+    symbols)
+        shift
+        run_symbols "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;
