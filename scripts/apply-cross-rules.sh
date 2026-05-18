@@ -8,7 +8,7 @@ TARGET_DIR="${1:-.}"
 
 # Bump this suffix whenever the rules text changes so updated rules re-apply
 # cleanly on existing checkouts instead of being skipped as "already present".
-MARKER_VERSION="v2"
+MARKER_VERSION="v3"
 
 RULES=$(cat << EOF
 
@@ -16,6 +16,7 @@ RULES=$(cat << EOF
 # TOKENSO CONTEXT OPTIMIZER RULES ($MARKER_VERSION)
 # ==========================================
 - **Smart Mode**: At the start of every session, run \`tokenso smart\` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use \`tokenso smart --json\` for machine-readable output.
+- **Observable Sessions**: When the user invokes an agent from a CLI (claude, kilo, gemini, codex, aider, etc.) wrap it with \`tokenso wrap\` to record real session metrics. For Claude in particular, pass \`--output-format stream-json\` for exact Read/Search/Bash/Edit counts.
 - **Symbol Lookup First**: To locate a function/class/type, ALWAYS check \`.ai-memory/symbol-map.txt\` (or run \`tokenso symbols <name>\`) BEFORE opening files. Each entry is \`path:line<TAB>kind<TAB>name\` — jump straight to the line, do not read the whole file.
 - **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search (\`tokenso search\`, \`tokenso symbols\`) to find filenames/symbols before reading. Only read specific line ranges required.
 - **Smart Init**: If you need to explore the project, do not run \`ls -R\`. Instead, run \`tokenso map\` (or \`bash .ai-memory/scripts/init-smart-search.sh .\`) and read \`.ai-memory/repo-map.txt\` + \`.ai-memory/symbol-map.txt\`.

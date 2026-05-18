@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.6.0"
+VERSION="2.7.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -860,6 +860,29 @@ generate_html_dashboard() {
     local cost_cum=$(cost_usd $CUMULATIVE_SAVED)
     local date_exported=$(date +"%Y-%m-%d %H:%M")
     local project_name=$(basename "$(pwd)")
+
+    # ─── Aggregate observed wrap-session metrics (real, not estimated) ──
+    local wrap_sessions=0
+    local wrap_reads=0
+    local wrap_searches=0
+    local wrap_bash=0
+    local wrap_edits=0
+    local wrap_bytes_read=0
+    if [ -d ".ai-memory/sessions" ]; then
+        wrap_sessions=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$wrap_sessions" -gt 0 ] && command -v jq >/dev/null 2>&1; then
+            wrap_reads=$(jq -s '[.[].observed.tool_calls.read // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            wrap_searches=$(jq -s '[.[].observed.tool_calls.search // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            wrap_bash=$(jq -s '[.[].observed.tool_calls.bash // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            wrap_edits=$(jq -s '[.[].observed.tool_calls.edit // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            wrap_bytes_read=$(jq -s '[.[].observed.bytes_read_est // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+        fi
+        for v in wrap_reads wrap_searches wrap_bash wrap_edits wrap_bytes_read; do
+            if [ -z "$(eval echo \$$v)" ] || [ "$(eval echo \$$v)" = "null" ]; then
+                eval "$v=0"
+            fi
+        done
+    fi
     local active_agents=$(detect_tools)
     
     # Format history as JSON array
@@ -928,7 +951,15 @@ generate_html_dashboard() {
         cumulativeSaved: ${CUMULATIVE_SAVED},
         costCum: "${cost_cum}",
         history: ${history_json},
-        milestones: ${milestones_json}
+        milestones: ${milestones_json},
+        observed: {
+            wrapSessions: ${wrap_sessions},
+            reads: ${wrap_reads},
+            searches: ${wrap_searches},
+            bash: ${wrap_bash},
+            edits: ${wrap_edits},
+            bytesRead: ${wrap_bytes_read}
+        }
     };
     </script>
 EOF
@@ -1152,6 +1183,75 @@ EOF
             font-size: 10px;
             fill: var(--text-dim);
             letter-spacing: 0.5px;
+        }
+
+        /* Observed Activity panel (real, from `tokenso wrap`) */
+        .observed-panel .panel-header { align-items: flex-start; }
+        .obs-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            color: var(--bg);
+            background: var(--emerald);
+            border-radius: 4px;
+            vertical-align: middle;
+        }
+        .obs-meta {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .obs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin-top: 18px;
+        }
+        .obs-stat {
+            padding: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+        }
+        .obs-stat-wide { grid-column: span 1; }
+        @media (min-width: 900px) {
+            .obs-stat-wide { grid-column: span 2; }
+        }
+        .obs-num {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--emerald);
+            letter-spacing: -0.5px;
+        }
+        .obs-lbl {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        .obs-empty {
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(255, 214, 10, 0.04);
+            border: 1px dashed rgba(255, 214, 10, 0.25);
+            border-radius: 10px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .obs-empty p { margin: 0 0 10px 0; }
+        .obs-empty pre {
+            margin: 0;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.35);
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--cyan);
+            overflow-x: auto;
         }
 
         /* Print stylesheet (Save-as-PDF) */
@@ -1787,7 +1887,29 @@ EOF
                 </div>
             </div>
         </div>
-        
+
+        <!-- Observed Activity (real, from `tokenso wrap` sessions) -->
+        <div class="glass-panel observed-panel" id="observed-panel" style="padding: 24px; margin-bottom: 30px;">
+            <div class="panel-header">
+                <div>
+                    <h2>Observed Activity <span class="obs-badge" id="obs-badge">REAL</span></h2>
+                    <p class="panel-subtitle">Aggregated from <code>tokenso wrap</code> sessions — measured, not estimated</p>
+                </div>
+                <div class="obs-meta" id="obs-sessions-count">0 sessions</div>
+            </div>
+            <div class="obs-grid" id="obs-grid">
+                <div class="obs-stat"><div class="obs-num" id="obs-reads">0</div><div class="obs-lbl">Read calls</div></div>
+                <div class="obs-stat"><div class="obs-num" id="obs-searches">0</div><div class="obs-lbl">Search/Grep calls</div></div>
+                <div class="obs-stat"><div class="obs-num" id="obs-bash">0</div><div class="obs-lbl">Bash calls</div></div>
+                <div class="obs-stat"><div class="obs-num" id="obs-edits">0</div><div class="obs-lbl">Edit calls</div></div>
+                <div class="obs-stat obs-stat-wide"><div class="obs-num" id="obs-bytes">0 KB</div><div class="obs-lbl">Bytes read (approx)</div></div>
+            </div>
+            <div class="obs-empty" id="obs-empty" style="display: none;">
+                <p>No wrapped sessions yet. To measure real agent activity instead of estimating it:</p>
+                <pre><code>tokenso wrap claude -p "your prompt" --output-format stream-json</code></pre>
+            </div>
+        </div>
+
         <!-- Footer -->
         <footer>
             <p>Tokenso Context Optimizer CLI <span id="ft-version">v—</span> — Powered by Bash &amp; Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank" rel="noopener">GitHub</a>.</p>
@@ -1819,7 +1941,18 @@ EOF
                 cumulativeSaved: num(d.cumulativeSaved, 0),
                 costCum:         d.costCum != null ? String(d.costCum) : '0',
                 history:         Array.isArray(d.history) ? d.history.filter(v => Number.isFinite(+v)).map(v => +v) : [],
-                milestones:      Array.isArray(d.milestones) ? d.milestones : []
+                milestones:      Array.isArray(d.milestones) ? d.milestones : [],
+                observed: (function() {
+                    var o = (d.observed && typeof d.observed === 'object') ? d.observed : {};
+                    return {
+                        wrapSessions: num(o.wrapSessions, 0),
+                        reads:        num(o.reads, 0),
+                        searches:     num(o.searches, 0),
+                        bash:         num(o.bash, 0),
+                        edits:        num(o.edits, 0),
+                        bytesRead:    num(o.bytesRead, 0)
+                    };
+                })()
             };
         }
         function debounce(fn, ms) {
@@ -1859,6 +1992,7 @@ EOF
             window.addEventListener('resize', debounce(drawSavingsChart, 120));
             drawGauge();
             renderSparklines();
+            renderObserved();
             wireExportButtons();
             
             const sliderRuns = document.getElementById('slider-runs');
@@ -1946,6 +2080,38 @@ EOF
             lineEl.setAttribute('d', linePath);
             svg.appendChild(fillEl);
             svg.appendChild(lineEl);
+        }
+
+        // Render Observed Activity panel
+        function renderObserved() {
+            var o = (window.TOKENSO_DATA && window.TOKENSO_DATA.observed) || {};
+            var sessions = o.wrapSessions || 0;
+            var meta = document.getElementById('obs-sessions-count');
+            if (meta) meta.textContent = sessions + ' session' + (sessions === 1 ? '' : 's');
+            var pairs = [
+                ['obs-reads',    o.reads],
+                ['obs-searches', o.searches],
+                ['obs-bash',     o.bash],
+                ['obs-edits',    o.edits]
+            ];
+            pairs.forEach(function(p) {
+                var el = document.getElementById(p[0]);
+                if (el) el.textContent = (p[1] || 0).toLocaleString();
+            });
+            var bytes = o.bytesRead || 0;
+            var bytesEl = document.getElementById('obs-bytes');
+            if (bytesEl) {
+                if (bytes >= 1024 * 1024) bytesEl.textContent = (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+                else if (bytes >= 1024)   bytesEl.textContent = Math.round(bytes / 1024) + ' KB';
+                else                      bytesEl.textContent = bytes + ' B';
+            }
+            // Hide grid + show empty state if no sessions yet.
+            var grid = document.getElementById('obs-grid');
+            var empty = document.getElementById('obs-empty');
+            if (sessions === 0 && grid && empty) {
+                grid.style.display = 'none';
+                empty.style.display = 'block';
+            }
         }
 
         // Toast notification
@@ -2574,6 +2740,221 @@ run_symbols() {
         fi
     fi
     echo ""
+}
+
+# ─── WRAP (Observed-Session Recorder) ─────────────────────────────────────
+# Spawns an agent CLI as a subprocess, tees stdout/stderr to a log, captures
+# git-tree delta + duration + (when available) parsed tool-call counts from
+# structured output. Writes a session manifest to .ai-memory/sessions/.
+#
+# Best-observability usage:
+#   tokenso wrap claude -p "fix the bug" --output-format stream-json
+# Best-effort usage (any CLI):
+#   tokenso wrap <any-agent-cli> [args...]
+
+run_wrap() {
+    if [ $# -eq 0 ]; then
+        echo -e "${RED}❌ Usage:${NC} ${CYAN}tokenso wrap <command> [args...]${NC}"
+        echo -e "  Example: ${CYAN}tokenso wrap claude -p 'fix the bug' --output-format stream-json${NC}"
+        return 1
+    fi
+
+    if [ ! -d ".ai-memory" ]; then
+        echo -e "${RED}❌ Tokenso not initialized. Run ${CYAN}tokenso smart${NC} first."
+        return 1
+    fi
+
+    mkdir -p .ai-memory/sessions
+    local sid
+    sid="$(date +%Y%m%dT%H%M%S)-$$"
+    local manifest=".ai-memory/sessions/${sid}.json"
+    local logfile=".ai-memory/sessions/${sid}.log"
+
+    # Detect structured-output mode (Claude --output-format stream-json/json).
+    local structured=false
+    local in_args=("$@")
+    for ((i=0; i<${#in_args[@]}; i++)); do
+        case "${in_args[$i]}" in
+            stream-json|json)
+                # Only count if it follows --output-format
+                if [ $i -gt 0 ] && [[ "${in_args[$((i-1))]}" == "--output-format" ]]; then
+                    structured=true
+                fi
+                ;;
+            --output-format=stream-json|--output-format=json) structured=true ;;
+        esac
+    done
+
+    # Pre-state.
+    local started_at; started_at=$(date +%s)
+    local started_iso; started_iso=$(date +"%Y-%m-%dT%H:%M:%S")
+    local cwd; cwd=$(pwd)
+    local cmd_str="$*"
+    local git_head_before=""
+    local has_git=false
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        has_git=true
+        git_head_before=$(git rev-parse HEAD 2>/dev/null || echo "")
+    fi
+
+    echo -e "${BCYAN}══ tokenso wrap ══${NC} ${DIM}session=${sid}  structured=${structured}${NC}"
+    echo -e "  ${DIM}Running:${NC} ${CYAN}$cmd_str${NC}"
+    echo -e "  ${DIM}Logging to:${NC} ${logfile}"
+    echo ""
+
+    # Run the command, tee'd to both terminal and log. Capture wrapped cmd's exit.
+    # NB: tokenso doesn't run `set -e`, so we don't need to toggle it here.
+    "$@" 2>&1 | tee "$logfile"
+    local exit_code=${PIPESTATUS[0]}
+
+    # Post-state.
+    local ended_at; ended_at=$(date +%s)
+    local ended_iso; ended_iso=$(date +"%Y-%m-%dT%H:%M:%S")
+    local duration=$(( ended_at - started_at ))
+
+    local files_modified=0
+    local files_added=0
+    if $has_git; then
+        # grep -c prints "0" AND exits 1 on no-match; capture exit code separately.
+        files_modified=$(git status --porcelain 2>/dev/null | grep -cE '^( M|M |MM)') || files_modified=0
+        files_added=$(git status --porcelain 2>/dev/null | grep -cE '^(\?\?|A |AM)') || files_added=0
+    fi
+
+    # Parse tool calls. Structured mode: jq-preferred, grep fallback.
+    local read_count=0 search_count=0 bash_count=0 edit_count=0 write_count=0
+    local bytes_read_est=0
+    if $structured && [ -s "$logfile" ]; then
+        if command -v jq >/dev/null 2>&1; then
+            # Each line is a JSON event. Sum tool-use of each kind.
+            read_count=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Read") | 1' "$logfile" 2>/dev/null | wc -l | tr -d ' ')
+            search_count=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and (.name=="Grep" or .name=="Glob")) | 1' "$logfile" 2>/dev/null | wc -l | tr -d ' ')
+            bash_count=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Bash") | 1' "$logfile" 2>/dev/null | wc -l | tr -d ' ')
+            edit_count=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Edit") | 1' "$logfile" 2>/dev/null | wc -l | tr -d ' ')
+            write_count=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Write") | 1' "$logfile" 2>/dev/null | wc -l | tr -d ' ')
+            # Approx bytes_read: sum length of Read tool_result content strings.
+            bytes_read_est=$(jq -r 'select(.type=="user") | .message.content[]? | select(.type=="tool_result") | (.content // "" | tostring | length)' "$logfile" 2>/dev/null \
+                | awk '{ s += $1 } END { print (s ? s : 0) }')
+        else
+            read_count=$(grep -c '"name":"Read"' "$logfile") || read_count=0
+            search_count=$(grep -cE '"name":"(Grep|Glob)"' "$logfile") || search_count=0
+            bash_count=$(grep -c '"name":"Bash"' "$logfile") || bash_count=0
+            edit_count=$(grep -c '"name":"Edit"' "$logfile") || edit_count=0
+            write_count=$(grep -c '"name":"Write"' "$logfile") || write_count=0
+        fi
+        for v in read_count search_count bash_count edit_count write_count bytes_read_est; do
+            eval "[ -z \"\$$v\" ] && $v=0"
+        done
+    fi
+
+    # Heuristic mode (non-structured): look for common "Reading ..." lines.
+    local heuristic_read=0
+    if ! $structured && [ -s "$logfile" ]; then
+        heuristic_read=$(grep -cE '(Reading |Read |Opening )[^[:space:]]+\.(ts|tsx|js|jsx|py|go|rs|sh|md|json|yaml|yml|html|css)' "$logfile") || heuristic_read=0
+    fi
+
+    # Escape cmd for JSON.
+    local cmd_json
+    cmd_json=$(printf '%s' "$cmd_str" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+    cat > "$manifest" <<EOF
+{
+  "schema": 1,
+  "session_id": "$sid",
+  "started_at": $started_at,
+  "started_iso": "$started_iso",
+  "ended_at": $ended_at,
+  "ended_iso": "$ended_iso",
+  "duration_sec": $duration,
+  "cwd": "$cwd",
+  "cmd": "$cmd_json",
+  "exit_code": $exit_code,
+  "structured_output": $structured,
+  "git": {
+    "has_git": $has_git,
+    "head_before": "$git_head_before",
+    "files_modified": $files_modified,
+    "files_added": $files_added
+  },
+  "observed": {
+    "tool_calls": {
+      "read": $read_count,
+      "search": $search_count,
+      "bash": $bash_count,
+      "edit": $edit_count,
+      "write": $write_count
+    },
+    "bytes_read_est": $bytes_read_est,
+    "heuristic_read_lines": $heuristic_read
+  }
+}
+EOF
+
+    echo ""
+    echo -e "${BCYAN}══ session $sid recorded ══${NC}"
+    echo -e "  ${DIM}Duration:${NC} ${duration}s   ${DIM}Exit:${NC} ${exit_code}   ${DIM}Git delta:${NC} +${files_added}/~${files_modified}"
+    if $structured; then
+        echo -e "  ${DIM}Tool calls observed:${NC} Read=${read_count} Search=${search_count} Bash=${bash_count} Edit=${edit_count} Write=${write_count}"
+        if [ "$bytes_read_est" -gt 0 ]; then
+            local kb=$(( bytes_read_est / 1024 ))
+            echo -e "  ${DIM}Bytes read (approx):${NC} ${kb} KB"
+        fi
+    elif [ "$heuristic_read" -gt 0 ]; then
+        echo -e "  ${DIM}Heuristic file-read lines:${NC} ${heuristic_read} ${DIM}(pass --output-format stream-json for exact counts)${NC}"
+    else
+        echo -e "  ${DIM}No tool calls observed.${NC} Pass ${CYAN}--output-format stream-json${NC} for exact metrics."
+    fi
+    echo -e "  ${DIM}Manifest:${NC} ${manifest}"
+    return $exit_code
+}
+
+# ─── SESSIONS (list past wrap recordings) ─────────────────────────────────
+run_sessions() {
+    local sdir=".ai-memory/sessions"
+    if [ ! -d "$sdir" ]; then
+        echo -e "${YELLOW}No wrapped sessions yet.${NC} Try: ${CYAN}tokenso wrap <agent-cli> ...${NC}"
+        return 0
+    fi
+
+    local count
+    count=$(find "$sdir" -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$count" = "0" ]; then
+        echo -e "${YELLOW}No wrapped sessions yet.${NC} Try: ${CYAN}tokenso wrap <agent-cli> ...${NC}"
+        return 0
+    fi
+
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🎬  Wrapped Sessions (${count})${NC}"
+    echo -e "${BCYAN}======================================================${NC}"
+    printf "  ${DIM}%-25s %-8s %-6s %-7s %s${NC}\n" "STARTED" "DUR" "EXIT" "RD/SR/BH" "CMD"
+
+    # List newest first, cap at 20.
+    find "$sdir" -name "*.json" -type f 2>/dev/null \
+        | sort -r | head -20 \
+        | while IFS= read -r mf; do
+            if command -v jq >/dev/null 2>&1; then
+                local started dur ec rc sc bc cmd
+                started=$(jq -r '.started_iso // "?"' "$mf" 2>/dev/null)
+                dur=$(jq -r '.duration_sec // 0' "$mf" 2>/dev/null)
+                ec=$(jq -r '.exit_code // 0' "$mf" 2>/dev/null)
+                rc=$(jq -r '.observed.tool_calls.read // 0' "$mf" 2>/dev/null)
+                sc=$(jq -r '.observed.tool_calls.search // 0' "$mf" 2>/dev/null)
+                bc=$(jq -r '.observed.tool_calls.bash // 0' "$mf" 2>/dev/null)
+                cmd=$(jq -r '.cmd // "?"' "$mf" 2>/dev/null | cut -c1-50)
+                printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "$rc/$sc/$bc" "$cmd"
+            else
+                # Crude grep fallback if jq missing.
+                local started dur ec cmd
+                started=$(grep -m1 '"started_iso"' "$mf" | cut -d'"' -f4)
+                dur=$(grep -m1 '"duration_sec"' "$mf" | tr -d ' ,' | cut -d: -f2)
+                ec=$(grep -m1 '"exit_code"' "$mf" | tr -d ' ,' | cut -d: -f2)
+                cmd=$(grep -m1 '"cmd"' "$mf" | cut -d'"' -f4 | cut -c1-50)
+                printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "?/?/?" "$cmd"
+            fi
+        done
+    echo ""
+    if [ "$count" -gt 20 ]; then
+        echo -e "  ${DIM}… showing newest 20 of ${count}. Manifests in ${sdir}/${NC}\n"
+    fi
 }
 
 # ─── CLEAN (Cache Wiper) ───────────────────────────────────────────────────
@@ -3448,9 +3829,10 @@ EOF
                     cat >> "$cfg" << 'RULES'
 
 # ==========================================
-# TOKENSO CONTEXT OPTIMIZER RULES (v2)
+# TOKENSO CONTEXT OPTIMIZER RULES (v3)
 # ==========================================
 - **Smart Mode**: At the start of every session, run `tokenso smart` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use `tokenso smart --json` for machine-readable output.
+- **Observable Sessions**: When the user invokes an agent from a CLI (claude, kilo, gemini, codex, aider, etc.) wrap it with `tokenso wrap` to record real session metrics. For Claude in particular, pass `--output-format stream-json` for exact Read/Search/Bash/Edit counts.
 - **Symbol Lookup First**: To locate a function/class/type, ALWAYS check `.ai-memory/symbol-map.txt` (or run `tokenso symbols <name>`) BEFORE opening files. Each entry is `path:line<TAB>kind<TAB>name` — jump straight to the line, do not read the whole file.
 - **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search (`tokenso search`, `tokenso symbols`) to find filenames/symbols before reading. Only read specific line ranges required.
 - **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `tokenso map` and read `.ai-memory/repo-map.txt` + `.ai-memory/symbol-map.txt`.
@@ -3752,6 +4134,14 @@ case "$1" in
     symbols)
         shift
         run_symbols "$@"
+        ;;
+    wrap)
+        shift
+        run_wrap "$@"
+        ;;
+    sessions)
+        shift
+        run_sessions "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;

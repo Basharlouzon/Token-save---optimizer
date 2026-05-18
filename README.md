@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.6.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.7.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,24 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.7.0
+
+Honest telemetry — measure agent activity instead of estimating it.
+
+- **`tokenso wrap <cmd> [args...]`** — Spawn any agent CLI as a subprocess, tee stdout/stderr to a session log, capture git-tree delta + duration + (when available) exact tool-call counts. Session manifest at `.ai-memory/sessions/<id>.json`.
+- **Structured-output parsing** — Pass `--output-format stream-json` to `claude -p` and Tokenso extracts exact `Read` / `Search` / `Bash` / `Edit` / `Write` counts and approximate bytes read from `tool_result` content. Uses `jq` if present, `grep -c` fallback.
+- **Best-effort heuristics for plain CLIs** — Even without structured output, every wrapped session gets duration, exit code, and git diff size recorded.
+- **`tokenso sessions`** — List the last 20 wrapped sessions with start time, duration, exit code, and tool-call counts.
+- **Dashboard: "Observed Activity" panel** — New REAL-badged panel separate from the existing Estimated cards. Shows aggregated Read/Search/Bash/Edit counts and bytes read across all wrapped sessions. Empty state shows the recipe for first-time users.
+- **Agent rules bumped to v3** — Adds an "Observable Sessions" rule telling agents to use `tokenso wrap` when launching nested CLI agents.
+- See [ADR-0005](docs/adr/0005-honest-telemetry.md).
+
+### Maximum-observability recipe
+
+```bash
+tokenso wrap claude -p "fix the bug" --output-format stream-json
+```
 
 ## ✨ What's new in 2.6.0
 
