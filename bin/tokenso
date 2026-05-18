@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.8.1"
+VERSION="2.8.2"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -4205,6 +4205,28 @@ EOF
         echo "═══ END REPORT ═══"
     fi
 }
+
+# ─── SELF-HEAL: ensure `tk` short alias exists ─────────────────────────────
+# Runs once per invocation. Cheap (one `[ -L ]` test on the happy path).
+# Only acts when the canonical binary is in a writable location and the
+# alias name `tk` is either absent or already a symlink (never overwrites a
+# user-owned regular file named `tk`).
+_ensure_tk_alias_once() {
+    local self
+    self=$(command -v tokenso 2>/dev/null) || return 0
+    [ -z "$self" ] && return 0
+    local d
+    d=$(dirname "$self")
+    local tk_path="$d/tk"
+    [ -e "$tk_path" ] && [ ! -L "$tk_path" ] && return 0   # real file: hands off
+    [ -L "$tk_path" ] && return 0                          # already linked
+    if [ -w "$d" ]; then
+        ln -sfn "$self" "$tk_path" 2>/dev/null || true
+    fi
+    # If $d is not writable we silently skip. The user can fix it once with
+    # `sudo ln -sfn $(command -v tokenso) /usr/local/bin/tk`.
+}
+_ensure_tk_alias_once
 
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in

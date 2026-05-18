@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.8.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.8.2-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,13 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.8.2
+
+Self-heal for the `tk` alias.
+
+- Users updating from a pre-2.8.1 version got the new binary but no `tk` symlink (the old `run_update` didn't know to create it). 2.8.2 fixes that: every `tokenso` invocation now ensures `tk` exists in the same directory as the canonical binary. The check is a single `[ -L ]` test on the happy path — no perceptible overhead.
+- Safe semantics: only creates the symlink when `tk` is absent or already a symlink. Never overwrites a real file named `tk` the user may own.
 
 ## ✨ What's new in 2.8.1
 
