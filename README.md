@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.7.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.7.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,13 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.7.1
+
+Discoverability fix.
+
+- **`tokenso help` now lists the v2.6 and v2.7 commands** (`symbols`, `wrap`, `sessions`) — they were dispatched correctly but missing from the help screen.
+- **Shell autocomplete updated** in `install.sh` to include `symbols`, `wrap`, `sessions`, `smart`, `watch`, `doctor`, `status` plus subcompletions for `watch start|stop|status`. Re-run `install.sh` (or run the install one-liner) to refresh your `~/.tokenso_completion.sh`.
 
 ## ✨ What's new in 2.7.0
 

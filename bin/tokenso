@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.7.0"
+VERSION="2.7.1"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -399,6 +399,9 @@ _show_commands() {
     echo -e "  ${CYAN}status${NC}    Quick one-line project health check"
     echo -e "  ${CYAN}watch${NC}     Background auto-save on file changes (start/stop/status)"
     echo -e "  ${CYAN}smart${NC}     AI agent autopilot: auto-init, refresh, save, diagnose, report"
+    echo -e "  ${CYAN}symbols${NC}   View/filter the symbol map (function/class/type index)"
+    echo -e "  ${CYAN}wrap${NC}      Run an agent CLI and record real session metrics (e.g. ${DIM}tokenso wrap claude -p ... --output-format stream-json${NC})"
+    echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }

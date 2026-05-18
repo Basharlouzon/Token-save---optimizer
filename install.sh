@@ -160,6 +160,13 @@ if [ -n "$ZSH_VERSION" ]; then
             'stats:Display token optimizer stats and savings'
             'state:Display current AI memory state.md'
             'map:Show compressed codebase repository map'
+            'symbols:View/filter the symbol map (function/class/type)'
+            'wrap:Run an agent CLI and record real session metrics'
+            'sessions:List past wrapped agent sessions'
+            'smart:Auto-init, refresh, save, diagnose, structured report'
+            'watch:Background auto-save on file changes'
+            'doctor:Run environment diagnostics'
+            'status:Quick one-line project health check'
             'clean:Clean temporary and cached optimizer files'
             'reset:Completely reset Tokenso files in repository'
             'update:Check and pull the latest CLI update'
@@ -184,6 +191,12 @@ if [ -n "$ZSH_VERSION" ]; then
                             '(-s --silent)'{-s,--silent}'[Execute silently without terminal logging]' \
                             '(-m --message)'{-m,--message}'[Append a milestone note description]'
                         ;;
+                    watch)
+                        _arguments '1:action:(start stop status)'
+                        ;;
+                    wrap)
+                        _arguments '*:command:_command_names -e'
+                        ;;
                 esac
                 ;;
         esac
@@ -200,7 +213,7 @@ if [ -n "$BASH_VERSION" ]; then
         COMPREPLY=()
         cur="${COMP_WORDS[COMP_CWORD]}"
         prev="${COMP_WORDS[COMP_CWORD-1]}"
-        opts="run install save search stats state map clean reset update help"
+        opts="run install save search stats state map symbols wrap sessions smart watch doctor status clean reset update help"
 
         if [[ ${COMP_CWORD} -eq 1 ]]; then
             COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -209,11 +222,19 @@ if [ -n "$BASH_VERSION" ]; then
 
         case "${prev}" in
             stats)
-                COMPREPLY=( $(compgen -W "--html" -- ${cur}) )
+                COMPREPLY=( $(compgen -W "--html --json --csv" -- ${cur}) )
                 return 0
                 ;;
             save)
                 COMPREPLY=( $(compgen -W "--silent -s --message -m" -- ${cur}) )
+                return 0
+                ;;
+            watch)
+                COMPREPLY=( $(compgen -W "start stop status" -- ${cur}) )
+                return 0
+                ;;
+            wrap)
+                COMPREPLY=( $(compgen -c -- ${cur}) )
                 return 0
                 ;;
         esac
