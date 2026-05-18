@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.7.1"
+VERSION="2.8.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -3958,6 +3958,110 @@ RULES
     local state_content=""
     if [ -f ".ai-memory/state.md" ]; then
         state_content=$(cat ".ai-memory/state.md")
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STEP 6.5: HEALTH LINTER (v2.8+)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Whether to auto-apply safe fixes. Pass --fix as an arg to opt in.
+    local apply_fix=false
+    for a in "$@"; do
+        [ "$a" = "--fix" ] && apply_fix=true
+    done
+
+    local lint_findings=()
+    _lint() { lint_findings+=("$1"); }
+
+    # 1) state.md rot detection.
+    if [ -f ".ai-memory/state.md" ]; then
+        # 1a) Leading garbage on line 1 BEFORE the first markdown heading.
+        # Matches headings at any level (# / ## / ### …).
+        local first_line
+        first_line=$(head -1 .ai-memory/state.md)
+        if [[ ! "$first_line" =~ ^#+[[:space:]] ]] && [ -n "$first_line" ]; then
+            _lint "state.md does not start with a heading (line 1: \"$first_line\") — likely stray characters"
+            if $apply_fix; then
+                # If the first line *contains* a heading prefix mid-string,
+                # strip leading non-heading chars in place (preserves the
+                # rest of the line). Otherwise drop the line entirely.
+                if [[ "$first_line" =~ \#+[[:space:]] ]]; then
+                    awk 'NR==1 { sub(/^[^#]*/, ""); print; next } { print }' \
+                        .ai-memory/state.md > .ai-memory/state.md.tmp \
+                        && mv .ai-memory/state.md.tmp .ai-memory/state.md \
+                        && _smart_action "Fixed: stripped leading garbage from state.md line 1"
+                else
+                    awk 'NR==1 && $0 !~ /^#+[[:space:]]/ { next } { print }' \
+                        .ai-memory/state.md > .ai-memory/state.md.tmp \
+                        && mv .ai-memory/state.md.tmp .ai-memory/state.md \
+                        && _smart_action "Fixed: dropped garbage line 1 of state.md"
+                fi
+            fi
+        fi
+
+        # 1b) Low-signal milestone lines: "! test", "! tes", "! tmp", "! foo", "! xxx", "! debug".
+        local rot_pat='^![[:space:]]*(test|tes|tmp|temp|foo|bar|baz|xxx|debug|todo|asdf|qwer)[[:space:]]*$'
+        local rot_count
+        rot_count=$(grep -cE "$rot_pat" .ai-memory/state.md) || rot_count=0
+        if [ "$rot_count" -gt 0 ]; then
+            _lint "state.md has $rot_count low-signal milestone line(s) (e.g. \`! test\`, \`! foo\`) — looks like leftover testing"
+            if $apply_fix; then
+                grep -vE "$rot_pat" .ai-memory/state.md > .ai-memory/state.md.tmp \
+                    && mv .ai-memory/state.md.tmp .ai-memory/state.md \
+                    && _smart_action "Fixed: removed $rot_count low-signal milestone(s) from state.md"
+            fi
+        fi
+
+        # 1c) Duplicate consecutive milestone lines (e.g. "! update" twice in a row).
+        local dup_count
+        dup_count=$(awk '/^![[:space:]]/ { if ($0==prev) dups++; prev=$0 } END { print dups+0 }' .ai-memory/state.md)
+        if [ "$dup_count" -gt 0 ]; then
+            _lint "state.md has $dup_count consecutive-duplicate milestone line(s)"
+            if $apply_fix; then
+                awk 'BEGIN{prev=""} { if (!/^![[:space:]]/ || $0!=prev) print; prev=$0 }' .ai-memory/state.md > .ai-memory/state.md.tmp \
+                    && mv .ai-memory/state.md.tmp .ai-memory/state.md \
+                    && _smart_action "Fixed: de-duplicated $dup_count consecutive milestone(s)"
+            fi
+        fi
+
+        # 1d) Bloated state.md (over 200 lines).
+        local state_lines
+        state_lines=$(wc -l < .ai-memory/state.md | tr -d ' ')
+        if [ "$state_lines" -gt 200 ]; then
+            _lint "state.md is $state_lines lines — consider compacting old milestones into a single 'Key Context' bullet"
+        fi
+    fi
+
+    # 2) Symbol/repo-map staleness — already partially handled, but flag if
+    #    the symbol map exists yet has 0 symbols (extractor failed silently).
+    if [ -f ".ai-memory/symbol-map.txt" ]; then
+        local sm_count
+        sm_count=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
+        if [ "$sm_count" = "0" ] && [ -n "$file_list" ]; then
+            _lint "symbol-map.txt exists but is empty — extractor may have failed; try \`bash scripts/build-symbol-map.sh .\`"
+        fi
+    fi
+
+    # 3) Estimated vs observed gap. If cumulative_saved has been growing
+    #    but no wrapped sessions exist, gently nudge.
+    local wrap_count=0
+    if [ -d ".ai-memory/sessions" ]; then
+        wrap_count=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    if [ "$next_sessions" -ge 5 ] && [ "$wrap_count" = "0" ]; then
+        _lint "Your savings number is fully estimated — 0 wrapped sessions. Try: \`tokenso wrap claude -p '...' --output-format stream-json\`"
+    fi
+
+    # 4) Orphan session log accumulation.
+    if [ "$wrap_count" -gt 100 ]; then
+        _lint "$wrap_count wrap-session manifests in .ai-memory/sessions/ — consider pruning the oldest"
+    fi
+
+    # 5) Surface findings to the report.
+    for f in "${lint_findings[@]}"; do
+        _smart_issue "$f"
+    done
+    if [ ${#lint_findings[@]} -gt 0 ] && ! $apply_fix; then
+        _smart_suggest "Re-run \`tokenso smart --fix\` to auto-apply safe cleanups for state.md issues"
     fi
 
     # ═══════════════════════════════════════════════════════════════════════

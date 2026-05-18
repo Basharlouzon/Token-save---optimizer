@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.7.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.8.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,17 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.8.0
+
+`tokenso smart` is now a health linter — silent rot in `state.md` and friends gets caught at the moment your agent reads it.
+
+- **`state.md` rot detection** — flags non-heading first lines (e.g. `x# AI Memory State`), low-signal milestone lines (`! test`, `! tes`, `! foo`, `! debug`…), consecutive duplicates, and bloat (> 200 lines).
+- **Empty symbol-map detection** — `.ai-memory/symbol-map.txt` exists but extractor produced 0 symbols.
+- **All-estimated trust gap** — if you have ≥ 5 sessions but 0 `tokenso wrap` sessions, gentle nudge that your savings number is fully estimated.
+- **Session-manifest bloat** — > 100 wrap manifests in `.ai-memory/sessions/` triggers a prune suggestion.
+- **`tokenso smart --fix`** — opt-in: auto-applies the safe cleanups (strip line-1 garbage, remove leftover test milestones, de-dup consecutive duplicates). Read-only checks stay read-only.
+- See [ADR-0006](docs/adr/0006-smart-linter.md).
 
 ## ✨ What's new in 2.7.1
 
