@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.4.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.5.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,18 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.5.0
+
+A dashboard polish release.
+
+- **Mini-sparklines in stat cards** — Each of the four KPI cards now has an inline trend line drawn from your last 10 sessions of history. Empty-state copy when there's not enough data yet.
+- **Animated count-up numbers** — Stat values ease from 0 to their final value on load, respecting `prefers-reduced-motion`.
+- **Copy stats as Markdown** — New "Copy" button in the header bundles project name, all KPIs, and recent milestones into a paste-ready Markdown table. Falls back to `execCommand` when the Clipboard API is blocked.
+- **Print / Save-as-PDF** — New "Print" button + a full `@media print` stylesheet renders a clean black-on-white version that fits cleanly on a single page, with sparklines preserved.
+- **Dynamic footer version** — Footer now reads `VERSION` from the runtime data instead of the previously hardcoded `v2.2.0`.
+- **Toast notifications** — Subtle bottom-center toast confirms copy actions.
+- **Keyboard shortcuts** — Press `C` to copy stats, `P` to print (ignored while focused on inputs).
 
 ## ✨ What's new in 2.4.0
 

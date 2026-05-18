@@ -31,13 +31,21 @@ System fonts: `ui-sans-serif, -apple-system, BlinkMacSystemFont, ...` — no web
 
 ## Components
 
-1. **Header** — ASCII art banner + animated gradient text.
-2. **Stats Cards** — Sessions, tokens saved, cost saved, avg/session. 4-col grid.
-3. **SVG Charts** — Radial gauge (`stroke-dasharray`), bar chart (per-session), sparkline (`<polyline>`).
+1. **Header** — Logo + title + action toolbar (`#btn-copy-md`, `#btn-print`) + "Active Project" badge.
+2. **Stats Cards** — 4 KPI cards (sessions, tokens saved, USD saved, compression factor). Each has:
+   - Animated count-up (eased; respects `prefers-reduced-motion`).
+   - Inline `<svg class="card-sparkline">` showing trend across `history[]`.
+3. **SVG Charts** — Radial gauge (`stroke-dasharray`) + big savings-history line chart with hover tooltip.
 4. **ROI Simulator** — Interactive: cost/1M, tokens/run, runs/day → monthly/yearly projections.
-5. **Milestone Timeline** — From `.ai-memory/state.md`.
-6. **Model Comparison Table** — Claude Sonnet ($3), Opus ($15), GPT-4o ($2.50), Gemini ($1.25).
-7. **Footer** — Version + repo link.
+5. **Milestone Timeline** — From lines beginning with `!` in `.ai-memory/state.md`.
+6. **Toast** — Bottom-center `#toast`; toggled by `showToast(msg)` (auto-hides after 1.8s).
+7. **Footer** — Dynamic `#ft-version` from `TOKENSO_DATA.version` + repo link.
+
+## Export & Print
+
+- **Copy as Markdown** — `copyAsMarkdown()` builds a report via `buildMarkdownReport()`. Tries `navigator.clipboard.writeText`, falls back to `execCommand('copy')` if the API throws (sandbox/permissions).
+- **Print / Save-as-PDF** — `window.print()`. The `@media print` block flips to B&W, hides interactive controls (`.action-buttons`, `.toast`, sliders, model buttons), and uses solid borders for paper.
+- **Keyboard** — `C` triggers copy, `P` triggers print. Both ignored when focus is on `INPUT`/`TEXTAREA` or when a modifier key is held.
 
 ## Accessibility
 

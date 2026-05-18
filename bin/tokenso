@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.4.0"
+VERSION="2.5.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -909,6 +909,7 @@ generate_html_dashboard() {
 
     <script>
     window.TOKENSO_DATA = {
+        version: "${VERSION}",
         projectName: "${project_name}",
         dateExported: "${date_exported}",
         activeAgents: "${active_agents}",
@@ -1046,8 +1047,9 @@ EOF
         
         .header-meta {
             display: flex;
-            gap: 16px;
+            gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .badge {
             background: rgba(0, 240, 255, 0.08);
@@ -1060,6 +1062,128 @@ EOF
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        /* Action buttons (Copy / Print) */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-icon {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            font-family: var(--font-sans);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+        }
+        .btn-icon:hover {
+            background: rgba(0, 240, 255, 0.08);
+            border-color: rgba(0, 240, 255, 0.25);
+        }
+        .btn-icon:active {
+            transform: translateY(1px);
+        }
+        .btn-icon:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 2px;
+        }
+        .btn-icon svg {
+            opacity: 0.85;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(15, 18, 30, 0.95);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: var(--text);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 240, 255, 0.1);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            z-index: 999;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Mini sparkline inside stat cards */
+        .card-sparkline {
+            display: block;
+            width: 100%;
+            max-width: 140px;
+            height: 28px;
+            margin-top: 8px;
+            opacity: 0.85;
+        }
+        .card-sparkline path.fill { opacity: 0.18; }
+        .card-sparkline path.line { fill: none; stroke-width: 1.6; }
+        .stat-card:nth-child(1) .card-sparkline path.line { stroke: var(--cyan); }
+        .stat-card:nth-child(1) .card-sparkline path.fill { fill: var(--cyan); }
+        .stat-card:nth-child(2) .card-sparkline path.line { stroke: var(--emerald); }
+        .stat-card:nth-child(2) .card-sparkline path.fill { fill: var(--emerald); }
+        .stat-card:nth-child(3) .card-sparkline path.line { stroke: var(--gold); }
+        .stat-card:nth-child(3) .card-sparkline path.fill { fill: var(--gold); }
+        .stat-card:nth-child(4) .card-sparkline path.line { stroke: var(--purple); }
+        .stat-card:nth-child(4) .card-sparkline path.fill { fill: var(--purple); }
+        .card-sparkline-empty {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            fill: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+
+        /* Print stylesheet (Save-as-PDF) */
+        @media print {
+            body {
+                background: #fff !important;
+                color: #111 !important;
+                background-image: none !important;
+            }
+            .container { padding: 0 12px; max-width: 100%; }
+            .glass-panel,
+            .stat-card,
+            .project-details-bar {
+                background: #fff !important;
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+                backdrop-filter: none !important;
+                page-break-inside: avoid;
+            }
+            .stat-value,
+            .gauge-percent,
+            .logo-title h1,
+            .roi-display-val { color: #111 !important; text-shadow: none !important; -webkit-text-fill-color: #111 !important; }
+            .logo-box { background: #111 !important; color: #fff !important; box-shadow: none !important; }
+            .badge { background: #f3f3f3 !important; color: #111 !important; border-color: #ccc !important; }
+            .action-buttons,
+            .toast,
+            .roi-flex .slider,
+            .model-select-grid,
+            .chart-point:hover { display: none !important; }
+            .panel-subtitle, .stat-info h3, .details-item span:first-child { color: #555 !important; }
+            footer p, footer a { color: #555 !important; }
+            a { text-decoration: underline; }
+            .card-sparkline { opacity: 1; }
+            .card-sparkline path.line { stroke: #111 !important; }
+            .card-sparkline path.fill { fill: #ccc !important; }
         }
         
         /* Stats Dashboard Grid */
@@ -1439,12 +1563,25 @@ EOF
             </div>
             
             <div class="header-meta">
+                <div class="action-buttons" role="toolbar" aria-label="Dashboard actions">
+                    <button type="button" class="btn-icon" id="btn-copy-md" title="Copy stats as Markdown (C)" aria-label="Copy stats as Markdown">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span>Copy</span>
+                    </button>
+                    <button type="button" class="btn-icon" id="btn-print" title="Print or save as PDF (P)" aria-label="Print or save as PDF">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                        <span>Print</span>
+                    </button>
+                </div>
                 <div class="badge">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:var(--cyan);box-shadow:0 0 8px var(--cyan);"></span>
                     Active Project
                 </div>
             </div>
         </header>
+
+        <!-- Toast notification (hidden until shown) -->
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
         
         <!-- Project Details Summary Bar -->
         <div class="glass-panel project-details-bar">
@@ -1472,34 +1609,38 @@ EOF
             <div class="glass-panel stat-card">
                 <div class="stat-info">
                     <h3>Total Sessions</h3>
-                    <p class="stat-value" id="card-sessions">-</p>
+                    <p class="stat-value" id="card-sessions" data-target="0">0</p>
+                    <svg class="card-sparkline" id="spark-sessions" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"></svg>
                 </div>
                 <div class="stat-icon">🔄</div>
             </div>
-            
+
             <!-- Cumulative Tokens Saved -->
             <div class="glass-panel stat-card">
                 <div class="stat-info">
                     <h3>Tokens Saved</h3>
-                    <p class="stat-value" id="card-tokens">-</p>
+                    <p class="stat-value" id="card-tokens" data-target="0">0</p>
+                    <svg class="card-sparkline" id="spark-tokens" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"></svg>
                 </div>
                 <div class="stat-icon">🧠</div>
             </div>
-            
+
             <!-- Cumulative USD Savings -->
             <div class="glass-panel stat-card">
                 <div class="stat-info">
                     <h3>Total Saved (USD)</h3>
-                    <p class="stat-value" id="card-savings">-</p>
+                    <p class="stat-value" id="card-savings" data-target="0" data-prefix="$" data-decimals="2">$0.00</p>
+                    <svg class="card-sparkline" id="spark-savings" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"></svg>
                 </div>
                 <div class="stat-icon">💰</div>
             </div>
-            
+
             <!-- Comp Ratio -->
             <div class="glass-panel stat-card">
                 <div class="stat-info">
                     <h3>Compression Factor</h3>
                     <p class="stat-value" id="card-ratio">-</p>
+                    <svg class="card-sparkline" id="spark-ratio" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"></svg>
                 </div>
                 <div class="stat-icon">⚡</div>
             </div>
@@ -1641,7 +1782,7 @@ EOF
         
         <!-- Footer -->
         <footer>
-            <p>Tokenso Context Optimizer CLI v2.2.0 — Powered by Bash & Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank">GitHub</a>.</p>
+            <p>Tokenso Context Optimizer CLI <span id="ft-version">v—</span> — Powered by Bash &amp; Vanilla CSS. Open source on <a href="https://github.com/Basharlouzon/Token-save---optimizer" target="_blank" rel="noopener">GitHub</a>.</p>
         </footer>
     </div>
     
@@ -1654,6 +1795,7 @@ EOF
                 return Number.isFinite(n) ? n : fallback;
             };
             return {
+                version:         d.version         || '',
                 projectName:     d.projectName     || '—',
                 dateExported:    d.dateExported    || '',
                 activeAgents:    d.activeAgents    || '',
@@ -1688,11 +1830,16 @@ EOF
             setText('dt-date', data.dateExported);
             setText('dt-files', data.filesCount);
             setText('dt-tools', data.activeAgents || 'None detected');
+            setText('ft-version', data.version ? 'v' + data.version : 'v—');
 
-            setText('card-sessions', data.sessions);
-            setText('card-tokens', data.cumulativeSaved.toLocaleString());
-            setText('card-savings', '$' + parseFloat(data.costCum || 0).toFixed(2));
-            setText('card-ratio', data.compRatio + 'x');
+            const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const animDur = prefersReducedMotion ? 0 : 900;
+
+            animateCount('card-sessions', data.sessions, animDur, { });
+            animateCount('card-tokens', data.cumulativeSaved, animDur, { format: (n) => Math.round(n).toLocaleString() });
+            animateCount('card-savings', parseFloat(data.costCum || 0), animDur, { format: (n) => '$' + n.toFixed(2) });
+            const ratioStr = data.compRatio + 'x';
+            setText('card-ratio', ratioStr);
 
             setText('gauge-pct', data.pct + '%');
             setText('gauge-comp-lbl', data.compRatio + 'x');
@@ -1701,6 +1848,8 @@ EOF
             drawSavingsChart();
             window.addEventListener('resize', debounce(drawSavingsChart, 120));
             drawGauge();
+            renderSparklines();
+            wireExportButtons();
             
             const sliderRuns = document.getElementById('slider-runs');
             const sliderTokens = document.getElementById('slider-tokens');
@@ -1723,6 +1872,157 @@ EOF
             if (sliderTokens) sliderTokens.addEventListener('input', updateROI);
             updateROI();
         });
+
+        // Count-up animation for stat-card numbers
+        function animateCount(id, target, duration, opts) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            opts = opts || {};
+            const fmt = typeof opts.format === 'function' ? opts.format : (n) => Math.round(n).toLocaleString();
+            target = Number.isFinite(+target) ? +target : 0;
+            if (duration <= 0) { el.textContent = fmt(target); return; }
+            const start = performance.now();
+            function frame(now) {
+                const t = Math.min(1, (now - start) / duration);
+                const eased = 1 - Math.pow(1 - t, 3);
+                el.textContent = fmt(target * eased);
+                if (t < 1) requestAnimationFrame(frame);
+                else el.textContent = fmt(target);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        // Sparkline renderer — draws into the inline <svg> for each stat card
+        function renderSparklines() {
+            const history = window.TOKENSO_DATA.history || [];
+            const targets = [
+                { id: 'spark-sessions', data: history.map((_, i) => i + 1) },
+                { id: 'spark-tokens',   data: history },
+                { id: 'spark-savings',  data: history },
+                { id: 'spark-ratio',    data: history }
+            ];
+            targets.forEach(t => drawMiniSparkline(t.id, t.data));
+        }
+        function drawMiniSparkline(id, raw) {
+            const svg = document.getElementById(id);
+            if (!svg) return;
+            const data = (raw || []).filter(v => Number.isFinite(+v)).map(v => +v);
+            svg.innerHTML = '';
+            if (data.length < 2) {
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', '0');
+                label.setAttribute('y', '20');
+                label.setAttribute('class', 'card-sparkline-empty');
+                label.textContent = data.length === 1 ? '— single session —' : '— awaiting history —';
+                svg.appendChild(label);
+                return;
+            }
+            const W = 100, H = 28;
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            const step = W / (data.length - 1);
+            const pts = data.map((v, i) => [
+                +(i * step).toFixed(2),
+                +(H - 2 - ((v - min) / range) * (H - 4)).toFixed(2)
+            ]);
+            const linePath = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0] + ',' + p[1]).join(' ');
+            const fillPath = linePath + ' L' + W + ',' + H + ' L0,' + H + ' Z';
+            const fillEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            fillEl.setAttribute('class', 'fill');
+            fillEl.setAttribute('d', fillPath);
+            const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lineEl.setAttribute('class', 'line');
+            lineEl.setAttribute('d', linePath);
+            svg.appendChild(fillEl);
+            svg.appendChild(lineEl);
+        }
+
+        // Toast notification
+        let _toastTimer = null;
+        function showToast(msg) {
+            const el = document.getElementById('toast');
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(_toastTimer);
+            _toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+        }
+
+        // Copy stats as Markdown
+        function buildMarkdownReport() {
+            const d = window.TOKENSO_DATA;
+            const lines = [];
+            lines.push('# Tokenso Stats — ' + (d.projectName || 'project'));
+            lines.push('');
+            lines.push('_Exported ' + (d.dateExported || 'unknown') + ' — Tokenso v' + (d.version || '?') + '_');
+            lines.push('');
+            lines.push('| Metric | Value |');
+            lines.push('|---|---|');
+            lines.push('| Sessions | ' + d.sessions + ' |');
+            lines.push('| Tokens saved (cumulative) | ' + Number(d.cumulativeSaved || 0).toLocaleString() + ' |');
+            lines.push('| USD saved (cumulative) | $' + parseFloat(d.costCum || 0).toFixed(2) + ' |');
+            lines.push('| Compression factor | ' + d.compRatio + 'x |');
+            lines.push('| Current session reduction | ' + d.pct + '% |');
+            lines.push('| Files scanned | ' + d.filesCount + ' |');
+            lines.push('| Detected tools | ' + (d.activeAgents || 'none') + ' |');
+            if (d.milestones && d.milestones.length) {
+                lines.push('');
+                lines.push('## Recent milestones');
+                d.milestones.slice(-10).reverse().forEach(m => lines.push('- ' + m));
+            }
+            return lines.join('\n');
+        }
+        function copyViaExecCommand(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, text.length);
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+            document.body.removeChild(ta);
+            return ok;
+        }
+        async function copyAsMarkdown() {
+            const text = buildMarkdownReport();
+            // Try Clipboard API first, fall through to execCommand on any failure.
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showToast('Stats copied as Markdown ✓');
+                    return;
+                } catch (e) {
+                    // Headless / permission-denied / no user gesture — fall through.
+                    console.warn('Tokenso clipboard API failed, falling back:', e);
+                }
+            }
+            if (copyViaExecCommand(text)) {
+                showToast('Stats copied as Markdown ✓');
+            } else {
+                showToast('Copy failed — select text manually');
+                console.error('Tokenso copy: both clipboard paths failed');
+            }
+        }
+
+        function wireExportButtons() {
+            const btnCopy = document.getElementById('btn-copy-md');
+            const btnPrint = document.getElementById('btn-print');
+            if (btnCopy) btnCopy.addEventListener('click', copyAsMarkdown);
+            if (btnPrint) btnPrint.addEventListener('click', () => window.print());
+
+            document.addEventListener('keydown', (e) => {
+                const tag = (e.target && e.target.tagName) || '';
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return;
+                if (e.key === 'c' || e.key === 'C') { copyAsMarkdown(); }
+                else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); window.print(); }
+            });
+        }
 
         let _gaugeRunning = false;
         function drawGauge() {
