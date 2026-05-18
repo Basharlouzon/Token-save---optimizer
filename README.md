@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.5.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.5.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,22 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.5.1
+
+A critical fix release.
+
+- **`tokenso update` is now atomic.** The previous implementation streamed the new binary directly over the live `tokenso` on PATH. A Ctrl+C, network drop, or bad payload would leave your install truncated and broken (typical symptom: `unexpected EOF while looking for matching '}'`). The updater now downloads to a temp file, validates (size > 10KB, shebang present, `bash -n` passes), and atomically replaces the binary via `install(1)` (with `mv` fallback). On *any* failure, your existing tokenso is left untouched.
+- Better network errors: `--connect-timeout 10 --max-time 120`, and a clear "Update aborted; existing tokenso is untouched" message instead of silent corruption.
+- See [ADR-0003](docs/adr/0003-atomic-self-update.md).
+
+If you got hit by the v2.5.0 bug, recover with one of:
+```bash
+curl -sSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso \
+  -o /tmp/tokenso.new && chmod +x /tmp/tokenso.new && mv /tmp/tokenso.new ~/.local/bin/tokenso
+# or
+curl -sSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/install.sh | bash
+```
 
 ## ✨ What's new in 2.5.0
 

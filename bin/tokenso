@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.5.0"
+VERSION="2.5.1"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -2550,15 +2550,17 @@ EOF
 # ─── UPDATE ─────────────────────────────────────────────────────────────────
 run_update() {
     echo -e "${BLUE}⬇  Checking for updates...${NC}"
-    local cmd_path=$(which tokenso 2>/dev/null)
+    local cmd_path
+    cmd_path=$(which tokenso 2>/dev/null)
     if [ -z "$cmd_path" ]; then
         echo -e "${RED}❌ Global 'tokenso' command not found in PATH.${NC}"
         echo -e "   Please run ${CYAN}bash install.sh${NC} to install or reinstall it."
         return 1
     fi
 
+    local remote_url="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso"
     local remote_version
-    remote_version=$(curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" 2>/dev/null \
+    remote_version=$(curl -fsSL "$remote_url" 2>/dev/null \
         | grep -m1 '^VERSION=' | cut -d'"' -f2)
 
     if [ -n "$remote_version" ]; then
@@ -2567,19 +2569,84 @@ run_update() {
             echo -e "  ${GREEN}✓ Already on the latest version.${NC}"
             return 0
         fi
+    else
+        echo -e "${RED}❌ Could not reach update server. Check your network and try again.${NC}"
+        return 1
     fi
 
-    local install_dir=$(dirname "$cmd_path")
-    if [ -w "$install_dir" ] && [ -w "$cmd_path" ]; then
-        curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" -o "$cmd_path"
-        chmod +x "$cmd_path"
+    # Download to a temp file so a Ctrl+C, network drop, or bad payload can NEVER
+    # leave a truncated tokenso binary on PATH (see ADR-0003).
+    local tmp_file
+    tmp_file=$(mktemp -t tokenso.XXXXXX) || {
+        echo -e "${RED}❌ Could not create temp file for update.${NC}"
+        return 1
+    }
+    # If anything aborts mid-download, drop the partial file.
+    trap 'rm -f "$tmp_file"' EXIT INT TERM HUP
+
+    echo -e "  ${DIM}Downloading v${remote_version}...${NC}"
+    if ! curl -fsSL --connect-timeout 10 --max-time 120 "$remote_url" -o "$tmp_file"; then
+        echo -e "${RED}❌ Download failed (curl exit $?). Update aborted; existing tokenso is untouched.${NC}"
+        rm -f "$tmp_file"; trap - EXIT INT TERM HUP
+        return 1
+    fi
+
+    # Validate before we ever replace the live binary.
+    local payload_size
+    payload_size=$(wc -c < "$tmp_file" 2>/dev/null | tr -d ' ')
+    if [ -z "$payload_size" ] || [ "$payload_size" -lt 10000 ]; then
+        echo -e "${RED}❌ Downloaded file looks truncated (${payload_size:-0} bytes). Update aborted.${NC}"
+        rm -f "$tmp_file"; trap - EXIT INT TERM HUP
+        return 1
+    fi
+    if ! head -c 12 "$tmp_file" | grep -q '^#!/bin/bash'; then
+        echo -e "${RED}❌ Downloaded file is not a bash script. Update aborted.${NC}"
+        rm -f "$tmp_file"; trap - EXIT INT TERM HUP
+        return 1
+    fi
+    if ! bash -n "$tmp_file" 2>/dev/null; then
+        echo -e "${RED}❌ Downloaded file failed syntax check. Update aborted; existing tokenso is untouched.${NC}"
+        rm -f "$tmp_file"; trap - EXIT INT TERM HUP
+        return 1
+    fi
+    chmod +x "$tmp_file"
+
+    # Atomic replace. install(1) on macOS/Linux performs rename-style replacement
+    # with mode bits set; fall back to mv if install isn't available.
+    local install_dir
+    install_dir=$(dirname "$cmd_path")
+    local replace_cmd=""
+    if command -v install >/dev/null 2>&1; then
+        replace_cmd="install -m 0755"
+    fi
+
+    local rc=0
+    if [ -w "$install_dir" ] && { [ ! -e "$cmd_path" ] || [ -w "$cmd_path" ]; }; then
+        if [ -n "$replace_cmd" ]; then
+            $replace_cmd "$tmp_file" "$cmd_path" || rc=$?
+        else
+            mv -f "$tmp_file" "$cmd_path" && chmod +x "$cmd_path" || rc=$?
+        fi
     else
         echo -e "${YELLOW}🔑 Sudo privileges required to update $cmd_path...${NC}"
-        sudo curl -sSL "https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso" -o "$cmd_path"
-        sudo chmod +x "$cmd_path"
+        if [ -n "$replace_cmd" ]; then
+            sudo $replace_cmd "$tmp_file" "$cmd_path" || rc=$?
+        else
+            sudo mv -f "$tmp_file" "$cmd_path" && sudo chmod +x "$cmd_path" || rc=$?
+        fi
     fi
-    echo -e "${GREEN}✅ Updated to latest version!${NC}"
-    tokenso --version
+
+    # Clear the trap; tmp_file is either moved or already cleaned up.
+    trap - EXIT INT TERM HUP
+    rm -f "$tmp_file" 2>/dev/null
+
+    if [ $rc -ne 0 ]; then
+        echo -e "${RED}❌ Replace failed (exit $rc). Existing tokenso is untouched.${NC}"
+        return $rc
+    fi
+
+    echo -e "${GREEN}✅ Updated to v${remote_version}.${NC}"
+    "$cmd_path" --version
 }
 
 # ─── VERSION ────────────────────────────────────────────────────────────────
