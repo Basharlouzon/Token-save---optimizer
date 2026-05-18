@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.8.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.8.1-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,15 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.8.1
+
+Short alias `tk` for `tokenso`.
+
+- `install.sh` now creates a `tk` symlink next to the `tokenso` binary, so `tk smart`, `tk symbols foo`, `tk wrap claude ...` all work.
+- `tokenso update` self-heals the symlink on each update — no re-install needed for existing users.
+- Bash and zsh autocompletion are wired to both names.
+- The canonical name is still `tokenso` — repo, brand, badge, and docs unchanged. `tk` is purely a typing shortcut.
 
 ## ✨ What's new in 2.8.0
 

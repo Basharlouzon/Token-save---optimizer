@@ -122,8 +122,18 @@ install_cli_from() {
         echo "" >&2
         echo -e "  ${BOLD}🔐 Your sudo password is required to install to $INSTALL_DIR:${NC}" >&2
         sudo install -m 0755 "$src" "$INSTALL_DIR/tokenso"
+        # Short alias: `tk` → `tokenso`. Symlink lets `tokenso update` keep
+        # working transparently (the alias resolves to whichever target was
+        # last installed). `ln -sfn` overwrites a stale link without removing
+        # a real file if a user has one named `tk`.
+        if [ ! -e "$INSTALL_DIR/tk" ] || [ -L "$INSTALL_DIR/tk" ]; then
+            sudo ln -sfn "$INSTALL_DIR/tokenso" "$INSTALL_DIR/tk" 2>/dev/null || true
+        fi
     else
         install -m 0755 "$src" "$INSTALL_DIR/tokenso"
+        if [ ! -e "$INSTALL_DIR/tk" ] || [ -L "$INSTALL_DIR/tk" ]; then
+            ln -sfn "$INSTALL_DIR/tokenso" "$INSTALL_DIR/tk" 2>/dev/null || true
+        fi
     fi
 }
 
@@ -203,6 +213,7 @@ if [ -n "$ZSH_VERSION" ]; then
     }
     if type compdef &>/dev/null; then
         compdef _tokenso_zsh_autocomplete tokenso
+        compdef _tokenso_zsh_autocomplete tk
     fi
 fi
 
@@ -240,6 +251,7 @@ if [ -n "$BASH_VERSION" ]; then
         esac
     }
     complete -F _tokenso_bash_autocomplete tokenso
+    complete -F _tokenso_bash_autocomplete tk
 fi
 EOF
 chmod +x "$HOME/.tokenso_completion.sh"

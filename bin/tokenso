@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.8.0"
+VERSION="2.8.1"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -385,6 +385,7 @@ show_dashboard() {
 
 _show_commands() {
     echo -e "  ${BOLD}── COMMANDS ─────────────────────────────────────────${NC}"
+    echo -e "  ${DIM}Tip: a short alias \`tk\` is installed alongside — e.g. \`tk smart\`, \`tk wrap …\`.${NC}"
     echo -e "  ${CYAN}run${NC}       Interactive cognitive mindmap search & stats save"
     echo -e "  ${CYAN}install${NC}   Interactive or non-interactive setup for this project"
     echo -e "  ${CYAN}save${NC}      Update repository map & save/update token stats"
@@ -3130,7 +3131,20 @@ run_update() {
         return $rc
     fi
 
+    # Ensure the `tk` short alias exists alongside the canonical binary.
+    # Safe: only creates/refreshes a symlink — never overwrites a real file
+    # of the same name a user may have created themselves.
+    local tk_path="$install_dir/tk"
+    if [ ! -e "$tk_path" ] || [ -L "$tk_path" ]; then
+        if [ -w "$install_dir" ]; then
+            ln -sfn "$cmd_path" "$tk_path" 2>/dev/null || true
+        else
+            sudo ln -sfn "$cmd_path" "$tk_path" 2>/dev/null || true
+        fi
+    fi
+
     echo -e "${GREEN}✅ Updated to v${remote_version}.${NC}"
+    [ -L "$tk_path" ] && echo -e "  ${DIM}Short alias \`tk\` available (e.g. \`tk smart\`, \`tk symbols\`).${NC}"
     "$cmd_path" --version
 }
 
