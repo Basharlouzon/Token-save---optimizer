@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="2.8.2"
+VERSION="2.9.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -737,7 +737,29 @@ run_search() {
     echo -e "${BGREEN}🔍 Zero-Waste Code Search${NC}  ${DIM}Query: '${query}'${NC}"
     echo -e "${BCYAN}======================================================${NC}\n"
 
-    # 1. Fuzzy Path Search
+    # 1. Symbol Map Match (highest density — jump to exact definition)
+    local sym_file=".ai-memory/symbol-map.txt"
+    if [ -f "$sym_file" ]; then
+        echo -e "  ${BOLD}${BCYAN}[ 🔣 Symbol Map Matches ]${NC}"
+        echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+        local sym_matches
+        sym_matches=$(grep -v '^#' "$sym_file" 2>/dev/null | grep -i -F "$query" | head -15) || true
+        if [ -n "$sym_matches" ]; then
+            local sym_total
+            sym_total=$(grep -v '^#' "$sym_file" 2>/dev/null | grep -ic -F "$query") || sym_total=0
+            echo "$sym_matches" | awk -F'\t' -v c="$CYAN" -v y="$YELLOW" -v g="$GREEN" -v n="$NC" '
+                { printf "    %s%s%s  %s%-6s%s  %s%s%s\n", c, $1, n, y, $2, n, g, $3, n }
+            '
+            if [ "$sym_total" -gt 15 ]; then
+                echo -e "    ${DIM}… and $((sym_total - 15)) more. Use 'tokenso symbols ${query}' for the full list.${NC}"
+            fi
+        else
+            echo -e "    ${DIM}No matching symbols (functions/classes/types).${NC}"
+        fi
+        echo ""
+    fi
+
+    # 2. Fuzzy Path Search
     local map_file=".ai-memory/repo-map.txt"
     if [ -f "$map_file" ]; then
         echo -e "  ${BOLD}${BCYAN}[ 📁 Codebase Blueprint Matches ]${NC}"
@@ -757,7 +779,7 @@ run_search() {
         echo ""
     fi
 
-    # 2. High-Density Snippet Scan
+    # 3. High-Density Snippet Scan
     echo -e "  ${BOLD}${BCYAN}[ 📝 Source Code Matches (Max 15) ]${NC}"
     echo -e "  ${DIM}─────────────────────────────────────────${NC}"
 
@@ -2912,53 +2934,201 @@ EOF
 }
 
 # ─── SESSIONS (list past wrap recordings) ─────────────────────────────────
-run_sessions() {
-    local sdir=".ai-memory/sessions"
-    if [ ! -d "$sdir" ]; then
-        echo -e "${YELLOW}No wrapped sessions yet.${NC} Try: ${CYAN}tokenso wrap <agent-cli> ...${NC}"
-        return 0
-    fi
+_sessions_dir() { echo ".ai-memory/sessions"; }
 
+_sessions_print_row() {
+    local mf=$1
+    if command -v jq >/dev/null 2>&1; then
+        local started dur ec rc sc bc cmd
+        started=$(jq -r '.started_iso // "?"' "$mf" 2>/dev/null)
+        dur=$(jq -r '.duration_sec // 0' "$mf" 2>/dev/null)
+        ec=$(jq -r '.exit_code // 0' "$mf" 2>/dev/null)
+        rc=$(jq -r '.observed.tool_calls.read // 0' "$mf" 2>/dev/null)
+        sc=$(jq -r '.observed.tool_calls.search // 0' "$mf" 2>/dev/null)
+        bc=$(jq -r '.observed.tool_calls.bash // 0' "$mf" 2>/dev/null)
+        cmd=$(jq -r '.cmd // "?"' "$mf" 2>/dev/null | cut -c1-50)
+        printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "$rc/$sc/$bc" "$cmd"
+    else
+        local started dur ec cmd
+        started=$(grep -m1 '"started_iso"' "$mf" | cut -d'"' -f4)
+        dur=$(grep -m1 '"duration_sec"' "$mf" | tr -d ' ,' | cut -d: -f2)
+        ec=$(grep -m1 '"exit_code"' "$mf" | tr -d ' ,' | cut -d: -f2)
+        cmd=$(grep -m1 '"cmd"' "$mf" | cut -d'"' -f4 | cut -c1-50)
+        printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "?/?/?" "$cmd"
+    fi
+}
+
+_sessions_list_default() {
+    local sdir=$(_sessions_dir)
     local count
     count=$(find "$sdir" -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
     if [ "$count" = "0" ]; then
         echo -e "${YELLOW}No wrapped sessions yet.${NC} Try: ${CYAN}tokenso wrap <agent-cli> ...${NC}"
         return 0
     fi
-
     echo -e "${BCYAN}======================================================${NC}"
     echo -e "${BGREEN}🎬  Wrapped Sessions (${count})${NC}"
     echo -e "${BCYAN}======================================================${NC}"
     printf "  ${DIM}%-25s %-8s %-6s %-7s %s${NC}\n" "STARTED" "DUR" "EXIT" "RD/SR/BH" "CMD"
-
-    # List newest first, cap at 20.
-    find "$sdir" -name "*.json" -type f 2>/dev/null \
-        | sort -r | head -20 \
-        | while IFS= read -r mf; do
-            if command -v jq >/dev/null 2>&1; then
-                local started dur ec rc sc bc cmd
-                started=$(jq -r '.started_iso // "?"' "$mf" 2>/dev/null)
-                dur=$(jq -r '.duration_sec // 0' "$mf" 2>/dev/null)
-                ec=$(jq -r '.exit_code // 0' "$mf" 2>/dev/null)
-                rc=$(jq -r '.observed.tool_calls.read // 0' "$mf" 2>/dev/null)
-                sc=$(jq -r '.observed.tool_calls.search // 0' "$mf" 2>/dev/null)
-                bc=$(jq -r '.observed.tool_calls.bash // 0' "$mf" 2>/dev/null)
-                cmd=$(jq -r '.cmd // "?"' "$mf" 2>/dev/null | cut -c1-50)
-                printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "$rc/$sc/$bc" "$cmd"
-            else
-                # Crude grep fallback if jq missing.
-                local started dur ec cmd
-                started=$(grep -m1 '"started_iso"' "$mf" | cut -d'"' -f4)
-                dur=$(grep -m1 '"duration_sec"' "$mf" | tr -d ' ,' | cut -d: -f2)
-                ec=$(grep -m1 '"exit_code"' "$mf" | tr -d ' ,' | cut -d: -f2)
-                cmd=$(grep -m1 '"cmd"' "$mf" | cut -d'"' -f4 | cut -c1-50)
-                printf "  %-25s %-8s %-6s %-7s %s\n" "$started" "${dur}s" "$ec" "?/?/?" "$cmd"
-            fi
-        done
+    find "$sdir" -name "*.json" -type f 2>/dev/null | sort -r | head -20 \
+        | while IFS= read -r mf; do _sessions_print_row "$mf"; done
     echo ""
     if [ "$count" -gt 20 ]; then
-        echo -e "  ${DIM}… showing newest 20 of ${count}. Manifests in ${sdir}/${NC}\n"
+        echo -e "  ${DIM}… showing newest 20 of ${count}. Use ${CYAN}tokenso sessions show <id>${DIM} or ${CYAN}tokenso sessions prune --keep N${DIM}.${NC}\n"
     fi
+}
+
+_sessions_show() {
+    local sdir=$(_sessions_dir)
+    local target=$1
+    local mf=""
+    if [ -z "$target" ] || [ "$target" = "last" ]; then
+        mf=$(find "$sdir" -name "*.json" -type f 2>/dev/null | sort -r | head -1)
+        if [ -z "$mf" ]; then
+            echo -e "${YELLOW}No sessions found.${NC}"
+            return 1
+        fi
+    elif [ -f "$sdir/$target.json" ]; then
+        mf="$sdir/$target.json"
+    elif [ -f "$sdir/$target" ]; then
+        mf="$sdir/$target"
+    else
+        mf=$(find "$sdir" -name "*${target}*.json" -type f 2>/dev/null | sort -r | head -1)
+        if [ -z "$mf" ]; then
+            echo -e "${RED}❌ No session matching '${target}'.${NC} Try ${CYAN}tokenso sessions${NC} to list."
+            return 1
+        fi
+    fi
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🎬  Session $(basename "$mf" .json)${NC}"
+    echo -e "${BCYAN}======================================================${NC}"
+    if command -v jq >/dev/null 2>&1; then
+        jq . "$mf"
+    else
+        cat "$mf"
+    fi
+    local logfile="${mf%.json}.log"
+    if [ -f "$logfile" ]; then
+        local loglines
+        loglines=$(wc -l < "$logfile" | tr -d ' ')
+        echo ""
+        echo -e "${DIM}Log: $logfile (${loglines} lines). Tail with: ${CYAN}tail -50 $logfile${NC}"
+    fi
+}
+
+_sessions_prune() {
+    local sdir=$(_sessions_dir)
+    local keep=""
+    local keep_days=""
+    local dry_run=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --keep)      keep="$2"; shift 2 ;;
+            --keep-days) keep_days="$2"; shift 2 ;;
+            --dry-run)   dry_run=true; shift ;;
+            *) echo -e "${RED}Unknown flag:${NC} $1"; return 1 ;;
+        esac
+    done
+
+    if [ -z "$keep" ] && [ -z "$keep_days" ]; then
+        echo -e "${RED}❌ Specify ${CYAN}--keep N${NC} (keep N newest) or ${CYAN}--keep-days N${NC} (keep last N days)."
+        echo -e "   Add ${CYAN}--dry-run${NC} to preview without deleting."
+        return 1
+    fi
+
+    local total
+    total=$(find "$sdir" -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$total" = "0" ]; then
+        echo -e "${YELLOW}No sessions to prune.${NC}"
+        return 0
+    fi
+
+    local to_delete=""
+    if [ -n "$keep" ]; then
+        to_delete=$(find "$sdir" -name "*.json" -type f 2>/dev/null | sort -r | tail -n +$((keep + 1)))
+    fi
+    if [ -n "$keep_days" ]; then
+        # mtime older than N days → delete
+        local d_list
+        d_list=$(find "$sdir" -name "*.json" -type f -mtime +"$keep_days" 2>/dev/null)
+        to_delete=$(printf "%s\n%s\n" "$to_delete" "$d_list" | grep -v '^$' | sort -u)
+    fi
+
+    if [ -z "$to_delete" ]; then
+        echo -e "${GREEN}✓ Nothing to prune.${NC} ${DIM}(total: $total)${NC}"
+        return 0
+    fi
+    local n
+    n=$(echo "$to_delete" | wc -l | tr -d ' ')
+
+    if $dry_run; then
+        echo -e "${YELLOW}Would delete $n session(s):${NC}"
+        echo "$to_delete" | head -10 | sed 's/^/  /'
+        [ "$n" -gt 10 ] && echo "  … and $((n - 10)) more"
+        echo -e "${DIM}Re-run without --dry-run to apply.${NC}"
+        return 0
+    fi
+
+    local deleted=0
+    while IFS= read -r mf; do
+        [ -z "$mf" ] && continue
+        local logfile="${mf%.json}.log"
+        rm -f "$mf" "$logfile" 2>/dev/null && deleted=$((deleted + 1))
+    done <<< "$to_delete"
+    echo -e "${GREEN}✓ Pruned $deleted session(s)${NC} ${DIM}(was $total, now $((total - deleted)))${NC}"
+}
+
+run_sessions() {
+    local sdir=$(_sessions_dir)
+    if [ ! -d "$sdir" ]; then
+        echo -e "${YELLOW}No wrapped sessions yet.${NC} Try: ${CYAN}tokenso wrap <agent-cli> ...${NC}"
+        return 0
+    fi
+
+    local sub="${1:-list}"
+    case "$sub" in
+        ""|list)
+            _sessions_list_default
+            ;;
+        show)
+            shift
+            _sessions_show "$@"
+            ;;
+        last)
+            _sessions_show last
+            ;;
+        prune)
+            shift
+            _sessions_prune "$@"
+            ;;
+        help|--help|-h)
+            cat <<EOF
+Usage: tokenso sessions [subcommand]
+
+Subcommands:
+  (none)              List newest 20 wrapped sessions
+  list                Same as no argument
+  show <id|prefix>    Show full manifest + log location for one session
+  last                Show the most recent session
+  prune --keep N      Delete all but newest N sessions
+  prune --keep-days N Delete sessions older than N days
+  prune ... --dry-run Preview without deleting
+
+Examples:
+  tokenso sessions
+  tokenso sessions last
+  tokenso sessions show 20260518T134120
+  tokenso sessions prune --keep 50
+  tokenso sessions prune --keep-days 30 --dry-run
+EOF
+            ;;
+        *)
+            echo -e "${RED}Unknown sessions subcommand:${NC} $sub"
+            echo -e "Try: ${CYAN}tokenso sessions help${NC}"
+            return 1
+            ;;
+    esac
 }
 
 # ─── CLEAN (Cache Wiper) ───────────────────────────────────────────────────
@@ -3460,6 +3630,21 @@ run_doctor() {
         _check "Global command: not found in PATH" "fail"
     fi
 
+    # `tk` short alias (since v2.8.1). Symlink-only — never a real file.
+    if command -v tk &>/dev/null; then
+        local tk_path
+        tk_path=$(which tk)
+        if [ -L "$tk_path" ]; then
+            local tk_target
+            tk_target=$(readlink "$tk_path" 2>/dev/null)
+            _check "Short alias 'tk': symlink → $tk_target" "ok"
+        else
+            _check "Short alias 'tk': $tk_path exists but is NOT a symlink (user-owned, left intact)" "warn"
+        fi
+    else
+        _check "Short alias 'tk': not found (run any tokenso command to self-heal, or re-run install.sh)" "warn"
+    fi
+
     _check "jq: $(command -v jq &>/dev/null && echo 'available' || echo 'missing (grep/awk fallback active)')" \
         "$(command -v jq &>/dev/null && echo ok || echo warn)"
     _check "rg (ripgrep): $(command -v rg &>/dev/null && echo 'available' || echo 'missing (find/grep fallback active)')" \
@@ -3496,10 +3681,30 @@ run_doctor() {
 
     [ -f ".ai-memory/repo-map.txt" ] && _check "repo-map.txt: exists ($(wc -l < .ai-memory/repo-map.txt | tr -d ' ') lines)" "ok" \
                                        || _check "repo-map.txt: not found (run 'tokenso save')" "warn"
+    if [ -f ".ai-memory/symbol-map.txt" ]; then
+        local sym_n
+        sym_n=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
+        if [ "$sym_n" -gt 0 ]; then
+            _check "symbol-map.txt: exists ($sym_n symbols)" "ok"
+        else
+            _check "symbol-map.txt: exists but empty (extractor likely failed)" "warn"
+        fi
+    else
+        _check "symbol-map.txt: not found (run 'tokenso map' to generate)" "warn"
+    fi
     [ -f ".ai-memory/state.md" ] && _check "state.md: exists" "ok" \
                                    || _check "state.md: not found" "warn"
     [ -f ".ai-memory/scripts/init-smart-search.sh" ] && _check "init-smart-search.sh: present" "ok" \
                                                        || _check "init-smart-search.sh: missing" "warn"
+    if [ -d ".ai-memory/sessions" ]; then
+        local sess_n
+        sess_n=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$sess_n" -gt 100 ]; then
+            _check "Wrapped sessions: $sess_n (consider 'tokenso sessions prune --keep 50')" "warn"
+        else
+            _check "Wrapped sessions: $sess_n" "ok"
+        fi
+    fi
 
     echo ""
     echo -e "  ${BOLD}── Active Tool Configs ──────────────────────────────${NC}"
@@ -3528,13 +3733,55 @@ run_status() {
     local project=$(basename "$(pwd)")
     local map_lines=0
     [ -f ".ai-memory/repo-map.txt" ] && map_lines=$(wc -l < ".ai-memory/repo-map.txt" | tr -d ' ')
+    local sym_count=0
+    [ -f ".ai-memory/symbol-map.txt" ] && sym_count=$(grep -cv '^#' .ai-memory/symbol-map.txt 2>/dev/null | tr -d ' ' || echo 0)
     local state_items=0
     [ -f ".ai-memory/state.md" ] && state_items=$(grep -c "^\- \[" ".ai-memory/state.md" 2>/dev/null || echo 0)
     local tools=$(detect_tools)
     local tool_count=0
     [ -n "$tools" ] && tool_count=$(echo "$tools" | wc -w | tr -d ' ')
 
-    echo -e "${BOLD}$project${NC}  ${DIM}v$VERSION  •  $SESSIONS sessions  •  $(fmt_num $CUMULATIVE_SAVED) tokens saved  •  $map_lines map lines  •  $state_items state items  •  $tool_count agents"
+    # Observed activity (real, from `tokenso wrap` sessions).
+    local wrap_count=0
+    local last_wrap_age=""
+    if [ -d ".ai-memory/sessions" ]; then
+        wrap_count=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$wrap_count" -gt 0 ]; then
+            local last_mf
+            last_mf=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | sort -r | head -1)
+            if [ -n "$last_mf" ]; then
+                local mtime now diff
+                mtime=$(stat -f %m "$last_mf" 2>/dev/null || stat -c %Y "$last_mf" 2>/dev/null || echo 0)
+                now=$(date +%s)
+                diff=$(( now - mtime ))
+                if   [ $diff -lt 60 ];      then last_wrap_age="${diff}s ago"
+                elif [ $diff -lt 3600 ];    then last_wrap_age="$((diff / 60))m ago"
+                elif [ $diff -lt 86400 ];   then last_wrap_age="$((diff / 3600))h ago"
+                else                              last_wrap_age="$((diff / 86400))d ago"
+                fi
+            fi
+        fi
+    fi
+
+    # Watcher state.
+    local watcher_indicator=""
+    if [ -f "$WATCH_PID_FILE" ]; then
+        local wpid
+        wpid=$(cat "$WATCH_PID_FILE" 2>/dev/null)
+        if [ -n "$wpid" ] && kill -0 "$wpid" 2>/dev/null; then
+            watcher_indicator="  •  ${GREEN}watch:on${NC}"
+        fi
+    fi
+
+    local line1="${BOLD}$project${NC}  ${DIM}v$VERSION${NC}"
+    local line2="${DIM}$SESSIONS sessions  •  $(fmt_num $CUMULATIVE_SAVED) tokens saved (est)  •  $map_lines map lines  •  $sym_count symbols  •  $state_items state items  •  $tool_count agents${NC}${watcher_indicator}"
+    local line3=""
+    if [ "$wrap_count" -gt 0 ]; then
+        line3="${DIM}  ↳ Observed: ${GREEN}$wrap_count${NC}${DIM} wrap session(s), last ${last_wrap_age}${NC}"
+    fi
+
+    echo -e "$line1  $line2"
+    [ -n "$line3" ] && echo -e "$line3"
 }
 
 # ─── WATCH (Background Auto-Save) ──────────────────────────────────────────

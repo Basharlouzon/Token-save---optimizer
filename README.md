@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.8.2-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.9.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,24 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.9.0
+
+Command polish — four upgrades that wire existing v2.6/v2.7/v2.8 data into the commands you actually run.
+
+- **`tokenso search` is now symbol-aware.** A new `[ 🔣 Symbol Map Matches ]` section appears first in results, showing `path:line  kind  name` for any symbol matching your query — no need to remember whether to run `search` or `symbols`.
+- **`tokenso sessions` subcommands**:
+  - `tokenso sessions show <id|prefix>` — full manifest + log location
+  - `tokenso sessions last` — most recent session
+  - `tokenso sessions prune --keep N` — delete all but newest N
+  - `tokenso sessions prune --keep-days N` — delete sessions older than N days
+  - Add `--dry-run` to preview deletions
+- **`tokenso status` shows observed activity.** Now includes symbol count, a `watch:on` indicator when the watcher is running, and a second line `↳ Observed: X wrap session(s), last Nm ago` when wraps exist.
+- **`tokenso doctor` checks more**:
+  - `tk` short-alias symlink integrity (warns if a real file shadows it, ok if symlink, suggests self-heal if missing)
+  - `symbol-map.txt` presence + non-emptiness (catches silent extractor failures)
+  - Wrapped-session count (warns when > 100, suggests `tokenso sessions prune`)
+- See [ADR-0007](docs/adr/0007-command-polish.md).
 
 ## ✨ What's new in 2.8.2
 
