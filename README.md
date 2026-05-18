@@ -1,6 +1,6 @@
 # Tokenso 🧠🔋
 
-[![Version](https://img.shields.io/badge/version-2.3.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/version-2.4.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
 
@@ -11,6 +11,14 @@ AI coding agents burn tokens fast — they read entire files to find one line, d
 Every session, Tokenso tracks exactly how many tokens and dollars you saved — with a live terminal dashboard and a premium HTML export with interactive charts.
 
 ---
+
+## ✨ What's new in 2.4.0
+
+A governance and decision-tracking release.
+
+- **`/architecture` skill** — New local skill at `.claude/skills/architecture/` that produces lightweight ADRs in `docs/adr/` with Tokenso-specific scoring dimensions (token cost, bash portability, install surface, cross-tool reach).
+- **ADR process adopted** — See `docs/adr/0001-adopt-adr-process.md`. Future non-trivial design decisions land as numbered, greppable markdown files alongside the code.
+- **Persistent release rules** — `CLAUDE.md` now codifies the version-bump + push-to-master flow so every agent session ships changes consistently.
 
 ## ✨ What's new in 2.3.0
 
