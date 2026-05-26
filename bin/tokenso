@@ -4475,6 +4475,56 @@ _ensure_tk_alias_once() {
 }
 _ensure_tk_alias_once
 
+run_smart_status() {
+    if [ ! -d ".ai-memory" ]; then
+        echo ""
+        echo -e "  ${YELLOW}⚠  Not initialized.${NC}  Run ${CYAN}tokenso config install${NC} to get started."
+        echo ""
+        echo -e "  ${DIM}tokenso help for commands${NC}"
+        echo ""
+        return
+    fi
+
+    load_or_init_stats
+
+    local file_list
+    file_list=$(list_source_files)
+    local raw_words=0
+    [ -n "$file_list" ] && raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    local map_words=0
+    [ -f ".ai-memory/repo-map.txt" ] && map_words=$(wc -w < ".ai-memory/repo-map.txt")
+    local raw_tokens=$(( raw_words * 13 / 10 ))
+    local map_tokens=$(( map_words * 13 / 10 ))
+    local saved_tokens=$(( raw_tokens - map_tokens ))
+    [ $saved_tokens -lt 0 ] && saved_tokens=0
+    local pct=0
+    [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
+    local cost_saved
+    cost_saved=$(cost_usd "$saved_tokens")
+    local cost_cum
+    cost_cum=$(cost_usd "$CUMULATIVE_SAVED")
+
+    local next_action=""
+    if [ -f ".ai-memory/state.md" ]; then
+        next_action=$(grep "^- \[ \]" ".ai-memory/state.md" 2>/dev/null | head -1 | sed 's/^- \[ \] //')
+    fi
+    [ -z "$next_action" ] && next_action="Run tokenso save to record this session"
+
+    local project
+    project=$(basename "$(pwd)")
+
+    echo ""
+    echo -e "  ${BOLD}${BCYAN}tokenso${NC}  ${CYAN}$project${NC}  ${DIM}v$VERSION${NC}          ${DIM}session $SESSIONS${NC}"
+    echo ""
+    printf "  %-18s %s\n" "Saved per session" "$(echo -e "${YELLOW}$(fmt_num $saved_tokens) tokens${NC}    ${GREEN}\$$cost_saved${NC}   $(draw_bar $pct)  ${pct}%")"
+    printf "  %-18s %s\n" "All-time" "$(echo -e "${BGREEN}$(fmt_num $CUMULATIVE_SAVED) tokens${NC}    ${GREEN}\$$cost_cum${NC}   ${DIM}$SESSIONS sessions${NC}")"
+    echo ""
+    echo -e "  ${BOLD}Next${NC}  ${CYAN}→${NC}  $next_action"
+    echo ""
+    echo -e "  ${DIM}tokenso stats for full report · tokenso help for commands${NC}"
+    echo ""
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
