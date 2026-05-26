@@ -132,16 +132,18 @@ A governance and decision-tracking release.
 
 ## ✨ What's new in 2.3.0
 
-A reliability and diagnostics release.
+A reliability, automation, and AI-agent integration release.
 
-- **`tokenso doctor`** — New diagnostics command that checks dependencies, project state, JSON health, and active tool configs with pass/warn/fail output.
+- **`tokenso smart`** — One command for AI agents to manage everything: auto-init, refresh stale maps, save stats, diagnose issues, read state, and return a structured report. Supports `--json` for machine-readable output. [See below](#-ai-agent-autopilot).
+- **`tokenso watch start`** — Background auto-save daemon that only triggers when files actually change (mtimes). Managed via `start`, `stop`, `restart`, `status`, `log`. [See below](#-background-auto-save).
+- **`tokenso doctor`** — Diagnostics command that checks dependencies, project state, JSON health, and active tool configs with pass/warn/fail output.
 - **`tokenso status`** — Quick one-line project health check (sessions, tokens saved, agents, map size).
+- **Enhanced mindmap.** `tokenso run` now shows real project data (file counts, agent status, state entries), animated synapse connections, compression vector stats, and a spinner-based save flow.
 - **No more hanging.** Replaced all fragile `exec < /dev/tty` redirects with per-prompt `< /dev/tty` reads throughout `tokenso install`, `tokenso save`, and `tokenso state`.
 - **Smarter self-update.** `tokenso update` now fetches the remote version first and skips the download if already current.
 - **Graceful search without perl.** Search highlighting falls back to `sed` when `perl` isn't installed.
 - **Enhanced state.md template.** New installs include `## Blocked` and `## Decisions` sections for richer AI memory tracking.
-- **Temp file cleanup.** An EXIT trap now removes `.ai-memory/temp_search_matches.txt` on every run.
-- **Fixed timing.** Search elapsed-time display no longer shows wrong values when `date +%s` isn't available.
+- **New rule: Smart Mode.** All injected rules now include `tokenso smart` as the first action AI agents should run every session.
 
 ## ✨ What's new in 2.2.0
 
@@ -207,7 +209,7 @@ An interactive wizard launches — select any combination of AI tools you use:
 ── Enterprise & Cloud ────────────────────────────
 14) GitHub Copilot       (.github/copilot-instructions.md)
 15) Amazon Q Developer   (.amazonq/rules/)
-     0) 🎯 ALL of them
+      0) 🎯 ALL of them
 
   Your selection: 1 9 14
 ```
@@ -231,6 +233,7 @@ Tokenso operates in three layers:
 | AI runs `ls -R` & reads whole files | AI reads a tiny compressed map (~1% of original) |
 | AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
 | Tokens explode every session | Context stays clean and savings compound |
+| You manually track savings | `tokenso smart` handles everything automatically |
 
 Once installed, **you don't need to do anything**. The AI reads the rules automatically. If you notice it looping, just tell it:
 
@@ -238,11 +241,164 @@ Once installed, **you don't need to do anything**. The AI reads the rules automa
 
 ---
 
+## 🤖 AI Agent Autopilot
+
+The `tokenso smart` command is designed for AI agents to run at the **start of every session**. It handles the full lifecycle in one call — no interactive prompts, no animations, just clean actionable output.
+
+### What it does (7 steps, zero prompts)
+
+| Step | Action | Auto? |
+|------|--------|-------|
+| 1. Auto-init | If `.ai-memory/` missing → creates map, stats, state, injects rules | ✅ |
+| 2. Refresh stale map | If files changed since last map → regenerates | ✅ |
+| 3. Save session stats | Calculates real token savings, updates cumulative totals | ✅ |
+| 4. Manage watcher | Checks if background watcher is alive, cleans stale PIDs | ✅ |
+| 5. Diagnose issues | Checks jq, rg, bc, JSON validity | ✅ |
+| 6. Read state | Returns full `state.md` content in the report | ✅ |
+| 7. Suggest actions | Recommends watcher, install, reading state | ✅ |
+
+### Text output
+
+```bash
+tokenso smart
+```
+
+```
+═══ TOKENSO SMART REPORT ═══
+project: my-app
+version: 2.3.0
+session: 14
+files: 47
+raw_tokens: 148200
+map_tokens: 1240
+saved_tokens: 146960
+saved_pct: 99
+cumulative_tokens: 1763520
+cumulative_usd: 5.2906
+map_lines: 24
+watcher: running (PID 12345)
+active_tools: Claude Code Cursor GitHub Copilot
+
+── ACTIONS TAKEN ──
+  ✓ Refreshed stale repo map
+  ✓ Saved session stats (14 sessions, 1,763,520 tokens cumulative)
+
+── SUGGESTIONS ──
+  → Read .ai-memory/state.md before starting work to recall prior context
+
+── ISSUES ──
+  (none)
+
+── STATE.MD ──
+# AI Memory State
+## Completed Tasks
+- [x] Implemented auth flow with JWT tokens
+## Next Actions
+- [ ] Wire /api/logout
+## Key Context & Architecture
+! Refresh tokens live in httpOnly cookies
+
+═══ END REPORT ═══
+```
+
+### JSON output (for scripts and integrations)
+
+```bash
+tokenso smart --json
+```
+
+```json
+{
+  "version": "2.3.0",
+  "project": "my-app",
+  "session": 14,
+  "files": 47,
+  "raw_tokens": 148200,
+  "map_tokens": 1240,
+  "saved_tokens": 146960,
+  "saved_pct": 99,
+  "cumulative_tokens": 1763520,
+  "cumulative_usd": 5.2906,
+  "watcher": "running (PID 12345)",
+  "active_tools": "Claude Code Cursor GitHub Copilot",
+  "actions_taken": ["Refreshed stale repo map", "Saved session stats"],
+  "suggestions": ["Read .ai-memory/state.md before starting work"],
+  "issues": [],
+  "state": "# AI Memory State\n## Completed Tasks\n..."
+}
+```
+
+### AI agent workflow
+
+```
+Agent starts session
+    │
+    ▼
+tokenso smart --json     ← one command, everything happens
+    │
+    ├─ Reads state.md from JSON response
+    ├─ Checks issues[] — fixes if any
+    ├─ Checks suggestions[] — acts on them
+    ├─ Now has full context without reading any source files
+    │
+    ▼
+Does work...
+    │
+    ▼
+tokenso save "completed X"
+    │
+    ▼
+tokenso smart --json     ← checkpoint before ending
+```
+
+---
+
+## 👁 Background Auto-Save
+
+`tokenso watch` runs a background daemon that automatically saves stats when files change — no cron job needed.
+
+**It's not a dumb timer.** The watcher compares file modification times against the repo map and only triggers a save when something actually changed. No changes = zero I/O.
+
+```bash
+tokenso watch start         # start auto-save (checks every 60s)
+tokenso watch start 120     # check every 2 minutes instead
+tokenso watch status        # is it running?
+tokenso watch log           # recent activity
+tokenso watch stop          # stop the daemon
+tokenso watch restart       # stop + start
+```
+
+### How it works
+
+```
+┌─────────────────────────────────────────────────┐
+│  tokenso watch start                             │
+│                                                   │
+│  Every 60s (configurable):                       │
+│    1. Compare .git/index mtime vs repo-map mtime │
+│    2. If git index is newer → files changed      │
+│    3. Run tokenso save --silent                  │
+│    4. Go back to sleep                           │
+│                                                   │
+│  If nothing changed → do nothing (zero I/O)      │
+└─────────────────────────────────────────────────┘
+```
+
+| What | Where |
+|------|-------|
+| PID file | `.ai-memory/.watch.pid` |
+| Log file | `.ai-memory/.watch.log` |
+| Logs | `tail -f .ai-memory/.watch.log` |
+
+> The watcher is stopped automatically by `tokenso clean` and survives terminal closure via `nohup` + `disown`.
+
+---
+
 ## 🧠 Interactive Mindmap
 
 > Requires `.ai-memory` to exist — run `tokenso install` (or `bash scripts/init-smart-search.sh .`) first.
 
-Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers code nodes, fires synapses to link them, and saves the optimized map:
+Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers real nodes with actual project data, fires animated synapses to link them, and saves the optimized map:
 
 ```
   ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ 
@@ -251,21 +407,29 @@ Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspa
      ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║
      ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝
      ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ 
-            Cognitive Mindmap Search  v2.2.0
+           Cognitive Mindmap Search  v2.3.0
 
-  🔍 Scanning project workspace for AI Mindmap nodes...
-    ● Discovered [Workspace Code] ... Logic structures & codebase symbols
-    ● Discovered [Context Rules] ... Agent constraints & optimization rules
-    ● Discovered [Memory State] ... AI milestone journal & state tracker
-    ● Discovered [Semantic Map] ... Optimized folder structures map
+  🔍 Phase 1: Scanning project workspace...
+  ◉  Discovered [Workspace Code] ... 47 source files detected
+  ◉  Discovered [Context Rules] ... Agent rules active
+  ◉  Discovered [Memory State] ... 5 state entries
+  ◉  Discovered [Semantic Map] ... 24-line compressed map
+  ◉  Discovered [Tokenso Core] ... v2.3.0 optimization engine
 
-  ⚡ Firing cognitive synapses to connect nodes...
-    Linked:  [Workspace Code] ══════════════════════════════> [Semantic Map]  ✔
-    Linked:  [Context Rules] ══════════════════════════════> [Memory State]  ✔
+  ⚡ Phase 2: Firing cognitive synapses to connect nodes...
+    Linked:  [Workspace Code] ════════════════> [Semantic Map]  ✔
+    Linked:  [Context Rules] ═════════════════> [Memory State]  ✔
+    Linked:  [Semantic Map] ══════════════════> [Tokenso Core]  ✔
+    Linked:  [Memory State] ══════════════════> [Tokenso Core]  ✔
 
   ✨ Cognitive Mindmap Successfully Integrated!
-  Estimated savings vectors initialized at ~85% context compression.
+  Compression Vector:  99% context reduction
+  Raw Estimate:       148,200 tokens
+  Optimized Map:      1,240 tokens
+  Tokens Saved:       146,960 tokens  ($0.44 est.)
 ```
+
+The animation now uses **real project data** — actual file counts, agent detection, state entries, and compression ratios instead of hardcoded placeholders.
 
 ---
 
@@ -276,14 +440,14 @@ Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspa
 Type `tokenso` or `tokenso stats` in any initialized project:
 
 ```
-📁 Project:  my-awesome-app
+📁 Project:  my-awesome-app    Installed: 2026-05-17
 🤖 Active agents: Claude Code  Cursor  GitHub Copilot
-──────────────────────────────────────────────────────
 ── THIS SESSION ─────────────────────────────────────
-  Full scan (est. tokens):      148,200
-  Optimized map tokens:           1,240
-  Tokens saved:                 146,960  (~99%)
-  Est. cost saved:              $0.4409
+  Full project scan (tokens):      148,200
+  Optimized map (tokens):           1,240
+  Tokens saved:                   146,960  (~99%)
+  Compression ratio:               119.5:1
+  Est. cost saved:                 $0.4409
 
   Reduction: [████████████████████████████████████░░░]  99%
 
@@ -291,6 +455,14 @@ Type `tokenso` or `tokenso stats` in any initialized project:
   Total AI sessions:            12
   Total tokens saved:           1,763,520
   Total cost saved (est.):      $5.29
+  Savings trend (last 10):     [  ▅▅████████]
+
+── ESTIMATED ROI BY MODEL ───────────────────────────
+  Model                Rate/1M    This Session    All-Time
+  Claude Sonnet 4      $3.00      $0.4409         $5.2906
+  Claude Opus 4        $15.00     $2.2044         $26.4528
+  Gemini 2.5 Pro       $1.25      $0.1837         $2.2044
+  GPT-4.1              $2.00      $0.2939         $3.5270
 ```
 
 ### HTML Visual Dashboard
@@ -352,7 +524,7 @@ tokenso state
 tokenso save "Implemented auth flow with JWT tokens"
 ```
 
-The state file (`.ai-memory/state.md`) tracks completed tasks, next actions, and key architectural decisions — so the AI can pick up where it left off without re-reading the entire codebase.
+The state file (`.ai-memory/state.md`) tracks completed tasks, next actions, blocked items, architectural decisions, and key context — so the AI can pick up where it left off without re-reading the entire codebase.
 
 ---
 
@@ -368,28 +540,50 @@ Shows a syntax-highlighted directory tree with file/folder counts and estimated 
 
 ---
 
-## 🛠 All Commands
+## 🛠 Commands
+
+### Daily
 
 | Command | Description |
 |---|---|
-| `tokenso` | Live terminal dashboard with stats |
-| `tokenso run` | Interactive cognitive mindmap & stats save |
-| `tokenso install` | Project setup wizard (select AI tools) |
+| `tokenso` | Smart status — tokens saved, next action |
 | `tokenso save` | Update repo map & record token stats |
 | `tokenso save "note"` | Save stats with a milestone note |
-| `tokenso search \<query\>` | Zero-waste codebase search |
+| `tokenso search <query>` | Zero-waste codebase search |
 | `tokenso state` | View & edit AI memory checklist |
-| `tokenso map` | Colorized repository structure tree |
 | `tokenso stats` | Detailed token report |
 | `tokenso stats --html` | Generate visual HTML dashboard |
 | `tokenso stats --json` | Export stats as JSON |
 | `tokenso stats --csv` | Export stats as CSV |
-| `tokenso clean` | Wipe cached optimizer files for this project |
-| `tokenso reset` | Clear cumulative stats history |
-| `tokenso update` | Self-update from GitHub |
-| `tokenso doctor` | Run environment diagnostics |
+
+### Management (`tokenso config <subcommand>`)
+
+| Command | Description |
+|---|---|
+| `tokenso config install` | Project setup wizard (select AI tools) |
+| `tokenso config watch start` | Start background auto-save daemon |
+| `tokenso config watch stop` | Stop the daemon |
+| `tokenso config watch status` | Check if watcher is running |
+| `tokenso config watch log` | Show recent watcher activity |
+| `tokenso config update` | Self-update from GitHub |
+| `tokenso config doctor` | Run environment diagnostics |
+| `tokenso config clean` | Wipe cached optimizer files for this project |
+| `tokenso config reset` | Clear cumulative stats history |
+
+### Other
+
+| Command | Description |
+|---|---|
+| `tokenso run` | Interactive cognitive mindmap & stats save |
+| `tokenso map` | Colorized repository structure tree |
+| `tokenso smart` | AI agent autopilot (auto-init, refresh, save, diagnose) |
+| `tokenso smart --json` | Same as above, JSON output |
 | `tokenso status` | Quick one-line project health check |
+| `tokenso help` | Show daily commands |
+| `tokenso help all` | Show all commands |
 | `tokenso --version` | Show version |
+
+> **Backward compatibility:** All old commands (`tokenso install`, `tokenso watch`, etc.) continue to work and now print a one-line hint pointing to the `config` namespace.
 
 ---
 
@@ -431,6 +625,7 @@ Tokenso prefers but does not require these tools:
 | `bc` | High-precision USD math | Falls back to `awk` arithmetic |
 | `rg` (ripgrep) | Faster file enumeration and search | Falls back to `find` / `grep` |
 | `tree` | Pretty repo-map rendering | Falls back to a flat `find` listing |
+| `perl` | Search result highlighting | Falls back to `sed` |
 
 Install any of these via your package manager (`brew install jq ripgrep tree`, `apt install jq ripgrep tree`, etc.).
 
@@ -441,6 +636,7 @@ The installer is idempotent — re-running `install.sh` will not duplicate PATH 
 To fully uninstall:
 
 ```bash
+tokenso watch stop 2>/dev/null   # stop any background watcher
 rm -f "$(command -v tokenso)" "$HOME/.tokenso_completion.sh"
 # Remove the marker-bracketed blocks from your shell profile (~/.zshrc, ~/.bashrc, etc.)
 ```
