@@ -115,6 +115,15 @@ list_source_files() {
 }
 
 # ─── JSON helpers ──────────────────────────────────────────────────────────
+_read_memory_graph_json() {
+    local gf=".ai-memory/token-memory-graph.json"
+    if [ -f "$gf" ] && [ -s "$gf" ]; then
+        cat "$gf"
+    else
+        echo "{}"
+    fi
+}
+
 # Prefer `jq` for correctness; fall back to a small grep/awk reader for the
 # four fields we actually use. The fallback cannot handle escaped quotes or
 # values inside nested objects — schema is flat by design.
@@ -998,7 +1007,8 @@ generate_html_dashboard() {
             bash: ${wrap_bash},
             edits: ${wrap_edits},
             bytesRead: ${wrap_bytes_read}
-        }
+        },
+        memoryGraph: $(_read_memory_graph_json)
     };
     </script>
 EOF
@@ -1929,6 +1939,20 @@ EOF
             </div>
         </div>
 
+        <!-- Cognitive Architecture — Memory Graph -->
+        <div class="glass-panel" id="memory-graph-panel" style="padding: 24px; margin-bottom: 30px;">
+            <div class="panel-header">
+                <div>
+                    <h2>🧠 Cognitive Architecture</h2>
+                    <p class="panel-subtitle">Memory graph nodes and data flow — live from <code>.ai-memory/token-memory-graph.json</code></p>
+                </div>
+                <div class="obs-meta" id="mg-schema">schema 2</div>
+            </div>
+            <div id="mg-container" style="position:relative;min-height:320px;">
+                <!-- Rendered by JS -->
+            </div>
+        </div>
+
         <!-- Observed Activity (real, from `tokenso wrap` sessions) -->
         <div class="glass-panel observed-panel" id="observed-panel" style="padding: 24px; margin-bottom: 30px;">
             <div class="panel-header">
@@ -2297,6 +2321,86 @@ EOF
             container.appendChild(frag);
         }
         
+        // Memory Graph Renderer
+        function renderMemoryGraph() {
+            var mg = window.TOKENSO_DATA.memoryGraph || {};
+            var container = document.getElementById('mg-container');
+            var schemaEl = document.getElementById('mg-schema');
+            if (!container) return;
+            if (!mg || !mg.nodes || Object.keys(mg.nodes).length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">No memory graph data. Run <code>tk save</code> to generate.</div>';
+                return;
+            }
+            if (schemaEl) schemaEl.textContent = 'schema ' + (mg.schema || '?');
+
+            var nodeDefs = {
+                workspace_code: { label: 'Workspace Code', icon: '📁', color: '#00f0ff' },
+                semantic_map:   { label: 'Semantic Map',   icon: '🗺️', color: '#00e676' },
+                token_memory:   { label: 'Token Memory',   icon: '🧠', color: '#ff6b6b' },
+                observed_metrics: { label: 'Observed Metrics', icon: '📊', color: '#ffd60a' },
+                memory_state:   { label: 'Memory State',   icon: '📝', color: '#bf5af2' },
+                milestone_analysis: { label: 'Milestone Analysis', icon: '🎯', color: '#ff9500' },
+                context_rules:  { label: 'Context Rules',  icon: '📜', color: '#bf5af2' },
+                tokenso_core:   { label: 'Tokenso Core',   icon: '⚡', color: '#00f0ff' }
+            };
+
+            // Layout positions (2 rows, centered)
+            var positions = {
+                workspace_code:  { x: 80,  y: 60 },
+                semantic_map:    { x: 80,  y: 200 },
+                token_memory:    { x: 320, y: 60 },
+                observed_metrics:{ x: 320, y: 200 },
+                memory_state:    { x: 560, y: 60 },
+                milestone_analysis: { x: 560, y: 200 },
+                context_rules:   { x: 800, y: 60 },
+                tokenso_core:    { x: 800, y: 200 }
+            };
+
+            var svgW = 920, svgH = 290;
+            var html = '<svg width="100%" viewBox="0 0 ' + svgW + ' ' + svgH + '" style="overflow:visible;">';
+
+            // Draw edges
+            var edges = mg.edges || [];
+            edges.forEach(function(e) {
+                var from = positions[e.from];
+                var to = positions[e.to];
+                if (!from || !to) return;
+                var fc = (nodeDefs[e.from] || {}).color || '#555';
+                html += '<line x1="' + (from.x+60) + '" y1="' + (from.y+35) + '" x2="' + (to.x+60) + '" y2="' + (to.y+15) + '" stroke="' + fc + '" stroke-width="1.5" stroke-opacity="0.3" stroke-dasharray="4 3"><animate attributeName="stroke-dashoffset" from="0" to="-14" dur="2s" repeatCount="indefinite"/></line>';
+            });
+
+            // Draw nodes
+            Object.keys(mg.nodes).forEach(function(key) {
+                var pos = positions[key];
+                if (!pos) return;
+                var def = nodeDefs[key] || { label: key, icon: '🔵', color: '#888' };
+                var data = mg.nodes[key];
+                var detail = '';
+                if (key === 'workspace_code') detail = (data.raw_tokens||0).toLocaleString() + ' tokens · ' + (data.files||0) + ' files';
+                else if (key === 'semantic_map') detail = (data.map_tokens||0).toLocaleString() + ' tokens · ' + (data.compression_pct||0) + '% reduction';
+                else if (key === 'token_memory') {
+                    detail = (data.sessions||0) + ' sessions · ' + (data.trend||'stable');
+                    var trendColor = data.trend === 'improving' ? '#00e676' : data.trend === 'declining' ? '#ff6b6b' : '#ffd60a';
+                    detail += ' <span style="color:' + trendColor + '">●</span>';
+                }
+                else if (key === 'observed_metrics') detail = (data.total_reads||0) + ' reads · ' + (data.total_edits||0) + ' edits';
+                else if (key === 'memory_state') detail = (data.milestones||[]).length + ' milestones';
+                else if (key === 'milestone_analysis') detail = (data.total_milestones||0) + ' total · low signal: ' + (data.has_low_signal ? '⚠️' : '✓');
+                else if (key === 'context_rules') detail = ((data.active_agents||'').substring(0,35)) + '…';
+                else if (key === 'tokenso_core') detail = 'v' + (data.version||'?');
+
+                html += '<g class="mg-node" style="cursor:pointer;" tabindex="0" role="button" aria-label="' + def.label + ': ' + detail + '">';
+                html += '<rect x="' + pos.x + '" y="' + pos.y + '" width="160" height="55" rx="12" fill="rgba(20,24,38,0.7)" stroke="' + def.color + '" stroke-width="1.5" stroke-opacity="0.5"/>';
+                html += '<text x="' + (pos.x+12) + '" y="' + (pos.y+22) + '" fill="' + def.color + '" font-size="14" font-weight="600">' + def.icon + ' ' + def.label + '</text>';
+                html += '<text x="' + (pos.x+12) + '" y="' + (pos.y+42) + '" fill="var(--text-dim)" font-size="10" font-family="var(--font-mono)">' + detail + '</text>';
+                html += '</g>';
+            });
+
+            html += '</svg>';
+            container.innerHTML = html;
+        }
+        renderMemoryGraph();
+
         // ROI Simulator engine
         const models = {
             sonnet: { name: 'Claude Sonnet 4', rate: 3.00 },
