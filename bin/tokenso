@@ -3231,7 +3231,16 @@ run_update() {
         return 1
     fi
 
-    local remote_url="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso"
+    # Use commit SHA to bypass aggressive CDN caching on raw.githubusercontent.com.
+    # The 'master' branch ref is heavily cached; commit SHAs are not.
+    local remote_sha
+    remote_sha=$(git ls-remote https://github.com/Basharlouzon/Token-save---optimizer.git HEAD 2>/dev/null | awk '{print $1}')
+    if [ -z "$remote_sha" ]; then
+        # Fallback to master ref (may be CDN-cached)
+        local remote_url="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/master/bin/tokenso"
+    else
+        local remote_url="https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer/${remote_sha}/bin/tokenso"
+    fi
     local remote_version
     remote_version=$(curl -fsSL "$remote_url" 2>/dev/null \
         | grep -m1 '^VERSION=' | cut -d'"' -f2)
