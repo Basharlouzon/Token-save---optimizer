@@ -7,11 +7,12 @@ x# AI Memory State
 - [ ] 
 
 ## Key Context & Architecture
-- (Add crucial project facts here to avoid re-reading files)
+- Tokenso v3.2.0 — Bash 3.2 compatible token optimizer
+- 8-node cognitive memory graph with live token tracking
+- Commands: search, save, stats, brief, init, map, status, doctor
+- Memory graph reads token history from .ai-memory/token-count.log
 
-! test
-! tes
-! update flag
-! update
-! test
-! yes
+! Memory graph with 8 cognitive nodes live
+! tokenso brief command for architecture briefing
+! HTML dashboard with SVG graph visualization
+! Token trend detection (stable/improving/declining)
