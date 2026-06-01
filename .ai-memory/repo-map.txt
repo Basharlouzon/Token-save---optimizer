@@ -5,10 +5,18 @@
 ├── SKILL.md
 ├── bin
 │   └── tokenso
+├── docs
+│   └── superpowers
+│       ├── plans
+│       │   └── 2026-05-26-two-tier-command-groups.md
+│       └── specs
+│           └── 2026-05-26-two-tier-command-groups-design.md
 ├── install.sh
 ├── scripts
 │   ├── apply-cross-rules.sh
 │   └── init-smart-search.sh
+├── tests
+│   └── test_ux.sh
 └── tokenso-dashboard.html
 
-3 directories, 9 files
+8 directories, 12 files

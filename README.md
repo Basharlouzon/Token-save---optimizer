@@ -1,8 +1,10 @@
-# Tokenso 🧠🔋
+tok# Tokenso 🧠🔋
 
 [![Version](https://img.shields.io/badge/version-2.9.0-00bcd4?style=flat-square)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00e676?style=flat-square)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=flat-square)]()
+[![AI Tools](https://img.shields.io/badge/compatible-16%2B%20AI%20tools-ff6b6b?style=flat-square)]()
+[![Tokens Saved](https://img.shields.io/badge/avg_savings-99%25%20context-00e676?style=flat-square)]()
 
 > **Stop AI agents from wasting tokens, looping, and reading your entire codebase.**
 
@@ -138,7 +140,8 @@ A reliability, automation, and AI-agent integration release.
 - **`tokenso watch start`** — Background auto-save daemon that only triggers when files actually change (mtimes). Managed via `start`, `stop`, `restart`, `status`, `log`. [See below](#-background-auto-save).
 - **`tokenso doctor`** — Diagnostics command that checks dependencies, project state, JSON health, and active tool configs with pass/warn/fail output.
 - **`tokenso status`** — Quick one-line project health check (sessions, tokens saved, agents, map size).
-- **Enhanced mindmap.** `tokenso run` now shows real project data (file counts, agent status, state entries), animated synapse connections, compression vector stats, and a spinner-based save flow.
+- **Token Memory Graph.** `tokenso run` now detects and reads token memory from stats history — a new **[Token Memory]** node displays cumulative savings across sessions, a sparkline trend, and recent milestone recall. Saves a machine-readable graph to `.ai-memory/token-memory-graph.json` with nodes and edges for AI agents to consume.
+- **Enhanced mindmap.** `tokenso run` now has 6 phases: scan → synapse → token memory recall → pulse animation → compression estimate → save. Shows real project data (file counts, agent status, state entries), 6 synapse connections between cognitive modules, and a spinner-based save flow.
 - **No more hanging.** Replaced all fragile `exec < /dev/tty` redirects with per-prompt `< /dev/tty` reads throughout `tokenso install`, `tokenso save`, and `tokenso state`.
 - **Smarter self-update.** `tokenso update` now fetches the remote version first and skips the download if already current.
 - **Graceful search without perl.** Search highlighting falls back to `sed` when `perl` isn't installed.
@@ -398,7 +401,7 @@ tokenso watch restart       # stop + start
 
 > Requires `.ai-memory` to exist — run `tokenso install` (or `bash scripts/init-smart-search.sh .`) first.
 
-Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers real nodes with actual project data, fires animated synapses to link them, and saves the optimized map:
+Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspace, discovers real nodes with actual project data, reads token memory from history, fires animated synapses to link 6 cognitive modules, and saves the optimized map with a machine-readable graph:
 
 ```
   ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ 
@@ -414,6 +417,7 @@ Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspa
   ◉  Discovered [Context Rules] ... Agent rules active
   ◉  Discovered [Memory State] ... 5 state entries
   ◉  Discovered [Semantic Map] ... 24-line compressed map
+  ◉  Discovered [Token Memory] ... 35 sessions, 972,764 cumulative tokens
   ◉  Discovered [Tokenso Core] ... v2.3.0 optimization engine
 
   ⚡ Phase 2: Firing cognitive synapses to connect nodes...
@@ -421,15 +425,50 @@ Run `tokenso run` to launch the cognitive mindmap — Tokenso scans your workspa
     Linked:  [Context Rules] ═════════════════> [Memory State]  ✔
     Linked:  [Semantic Map] ══════════════════> [Tokenso Core]  ✔
     Linked:  [Memory State] ══════════════════> [Tokenso Core]  ✔
+    Linked:  [Token Memory] ══════════════════> [Semantic Map]  ✔
+    Linked:  [Token Memory] ══════════════════> [Memory State]  ✔
+
+  🧠 Phase 3: Reading token memory from history...
+    Savings trend: ▂▂▅▅████
+    Last 10 sessions recalled from .ai-memory/optimizer-stats.json
+    Recent milestones:
+    ◆ Implemented auth flow with JWT tokens
+    ◆ Wired /api/logout endpoint
 
   ✨ Cognitive Mindmap Successfully Integrated!
   Compression Vector:  99% context reduction
   Raw Estimate:       148,200 tokens
   Optimized Map:      1,240 tokens
   Tokens Saved:       146,960 tokens  ($0.44 est.)
+  Nodes Connected:    6 cognitive modules linked
+  Token Memory:       972,764 tokens recalled across 35 sessions
 ```
 
-The animation now uses **real project data** — actual file counts, agent detection, state entries, and compression ratios instead of hardcoded placeholders.
+The mindmap now runs in **6 phases** — scan, synapse, token memory recall, pulse animation, compression estimate, and save — using **real project data** with cumulative token memory detection.
+
+### Token Memory Graph JSON
+
+After saving, Tokenso generates a machine-readable graph at `.ai-memory/token-memory-graph.json` that AI agents can read to understand the full token savings history:
+
+```json
+{
+  "schema": 1,
+  "version": "2.3.0",
+  "nodes": {
+    "workspace_code": { "raw_tokens": 148200, "files": 47 },
+    "semantic_map":   { "map_tokens": 1240, "compression_pct": 99 },
+    "token_memory":   { "sessions": 35, "cumulative_saved": 972764, "history": [...] },
+    "memory_state":   { "milestones": ["Implemented auth flow", "..."] },
+    "context_rules":  { "active_agents": "Claude Code Cursor" },
+    "tokenso_core":   { "version": "2.3.0" }
+  },
+  "edges": [
+    { "from": "workspace_code", "to": "semantic_map", "data": "raw→compressed (99% reduction)" },
+    { "from": "token_memory",   "to": "semantic_map", "data": "history→compression trend" },
+    ...
+  ]
+}
+```
 
 ---
 
@@ -574,7 +613,7 @@ Shows a syntax-highlighted directory tree with file/folder counts and estimated 
 
 | Command | Description |
 |---|---|
-| `tokenso run` | Interactive cognitive mindmap & stats save |
+| `tokenso run` | Interactive cognitive mindmap with token memory graph & stats save |
 | `tokenso map` | Colorized repository structure tree |
 | `tokenso smart` | AI agent autopilot (auto-init, refresh, save, diagnose) |
 | `tokenso smart --json` | Same as above, JSON output |
@@ -702,9 +741,47 @@ tokenso reset
 
 ---
 
+## 📁 Project Structure
+
+```
+.
+├── bin/tokenso              # Main CLI binary (pure Bash, ~3,400 lines)
+├── scripts/
+│   ├── init-smart-search.sh # Compressed repo map generator
+│   └── apply-cross-rules.sh # Cross-tool rule injection
+├── docs/superpowers/        # Design specs & plans
+├── install.sh               # Global installer (curl | bash)
+├── CLAUDE.md                # Claude Code rules
+├── SKILL.md                 # Antigravity skill definition
+└── README.md
+```
+
+### Generated at runtime (per project)
+
+```
+.ai-memory/
+├── repo-map.txt              # Ultra-compressed directory tree
+├── optimizer-stats.json      # Session history & cumulative savings
+├── state.md                  # AI memory checklist (tasks, decisions, milestones)
+├── token-memory-graph.json   # Machine-readable graph for AI agents (new!)
+├── scripts/                  # Init script copy
+└── .watch.pid / .watch.log   # Watcher daemon files
+```
+
+---
+
 ## 🤝 Contributing
 
 PRs and issues are welcome at [github.com/Basharlouzon/Token-save---optimizer](https://github.com/Basharlouzon/Token-save---optimizer).
+
+### Quick dev setup
+
+```bash
+git clone https://github.com/Basharlouzon/Token-save---optimizer.git
+cd Token-save---optimizer
+bash bin/tokenso install      # test the installer
+bash bin/tokenso run          # test the mindmap
+```
 
 ---
 

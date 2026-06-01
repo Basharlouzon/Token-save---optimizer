@@ -3323,6 +3323,69 @@ show_version() {
     echo "tokenso v$VERSION"
 }
 
+# ─── TOKEN MEMORY GRAPH HELPER ────────────────────────────────────────────
+_save_token_memory_graph() {
+    local raw=$1 map=$2 saved=$3 pct=$4
+    local graph_file=".ai-memory/token-memory-graph.json"
+    load_or_init_stats
+
+    local milestones_json="[]"
+    if [ -f ".ai-memory/state.md" ]; then
+        local ms_arr=()
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" =~ ^\![[:space:]]*(.*) ]]; then
+                local ms=$(echo "${BASH_REMATCH[1]}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+                ms_arr+=("\"$ms\"")
+            fi
+        done < ".ai-memory/state.md"
+        if [ ${#ms_arr[@]} -gt 0 ]; then
+            local joined=""
+            for ((i=0; i<${#ms_arr[@]}; i++)); do
+                joined="${joined}${ms_arr[$i]}"
+                [ $i -lt $(( ${#ms_arr[@]} - 1 )) ] && joined="${joined}, "
+            done
+            milestones_json="[$joined]"
+        fi
+    fi
+
+    local hist_json="["
+    for ((i=0; i<${#HISTORY_ARR[@]}; i++)); do
+        hist_json="${hist_json}${HISTORY_ARR[$i]}"
+        [ $i -lt $(( ${#HISTORY_ARR[@]} - 1 )) ] && hist_json="${hist_json}, "
+    done
+    hist_json="${hist_json}]"
+
+    local graph_files_count=0
+    local graph_file_list
+    graph_file_list=$(list_source_files)
+    [ -n "$graph_file_list" ] && graph_files_count=$(echo "$graph_file_list" | wc -l | tr -d ' ')
+
+    cat > "$graph_file" << GRAPH_EOF
+{
+  "schema": 1,
+  "version": "$VERSION",
+  "generated": "$(date +"%Y-%m-%d %H:%M")",
+  "project": "$(basename "$(pwd)")",
+  "nodes": {
+    "workspace_code": { "raw_tokens": $raw, "files": $graph_files_count },
+    "semantic_map": { "map_tokens": $map, "compression_pct": $pct },
+    "token_memory": { "sessions": $SESSIONS, "cumulative_saved": $CUMULATIVE_SAVED, "history": $hist_json },
+    "memory_state": { "milestones": $milestones_json },
+    "context_rules": { "active_agents": "$(detect_tools)" },
+    "tokenso_core": { "version": "$VERSION" }
+  },
+  "edges": [
+    { "from": "workspace_code", "to": "semantic_map", "data": "raw→compressed (${pct}% reduction)" },
+    { "from": "token_memory", "to": "memory_state", "data": "sessions→milestones" },
+    { "from": "context_rules", "to": "memory_state", "data": "rules→state tracking" },
+    { "from": "semantic_map", "to": "tokenso_core", "data": "map→optimization" },
+    { "from": "memory_state", "to": "tokenso_core", "data": "state→engine" },
+    { "from": "token_memory", "to": "semantic_map", "data": "history→compression trend" }
+  ]
+}
+GRAPH_EOF
+}
+
 # ─── RUN (GUI INTERACTIVE ENGINE) ───────────────────────────────────────────
 
 _gui_progress() {
@@ -3490,9 +3553,24 @@ run_gui() {
     [ -f ".ai-memory/state.md" ] && node_ms="$(grep -c "^- \[" .ai-memory/state.md 2>/dev/null || echo 0) state entries" || node_ms="State not initialized"
     [ -f ".ai-memory/repo-map.txt" ] && node_sm="$(wc -l < .ai-memory/repo-map.txt | tr -d ' ')-line compressed map" || node_sm="Map not generated"
 
-    local scan_targets=("Workspace Code" "Context Rules" "Memory State" "Semantic Map" "Tokenso Core")
-    local scan_details=("$node_ws" "$node_cr" "$node_ms" "$node_sm" "v$VERSION optimization engine")
-    local scan_colors=("$BCYAN" "$MAGENTA" "$YELLOW" "$BGREEN" "$BBLUE")
+    # ── Detect token memory from stats history ──
+    load_or_init_stats
+    local node_tm=""
+    if [ "$SESSIONS" -gt 0 ] && [ ${#HISTORY_ARR[@]} -gt 0 ]; then
+        local avg_saved=0
+        local total_hist=0
+        for v in "${HISTORY_ARR[@]}"; do total_hist=$(( total_hist + v )); done
+        avg_saved=$(( total_hist / ${#HISTORY_ARR[@]} ))
+        node_tm="${SESSIONS} sessions, $(fmt_num $CUMULATIVE_SAVED) cumulative tokens, avg $(fmt_num $avg_saved)/session"
+    elif [ "$SESSIONS" -gt 0 ]; then
+        node_tm="${SESSIONS} sessions, $(fmt_num $CUMULATIVE_SAVED) cumulative tokens"
+    else
+        node_tm="No prior sessions — first run"
+    fi
+
+    local scan_targets=("Workspace Code" "Context Rules" "Memory State" "Semantic Map" "Token Memory" "Tokenso Core")
+    local scan_details=("$node_ws" "$node_cr" "$node_ms" "$node_sm" "$node_tm" "v$VERSION optimization engine")
+    local scan_colors=("$BCYAN" "$MAGENTA" "$YELLOW" "$BGREEN" "$BRED" "$BBLUE")
     local scan_count=${#scan_targets[@]}
 
     for ((i=0; i<scan_count; i++)); do
@@ -3516,9 +3594,36 @@ run_gui() {
     _gui_draw_connection "Context Rules" "$MAGENTA" "Memory State" "$YELLOW" 0.15
     _gui_draw_connection "Semantic Map" "$BGREEN" "Tokenso Core" "$BBLUE" 0.1
     _gui_draw_connection "Memory State" "$YELLOW" "Tokenso Core" "$BBLUE" 0.1
+    _gui_draw_connection "Token Memory" "$BRED" "Semantic Map" "$BGREEN" 0.12
+    _gui_draw_connection "Token Memory" "$BRED" "Memory State" "$YELLOW" 0.12
     echo ""
 
-    # ── Phase 3: Mindmap pulse animation ──
+    # ── Phase 3: Token Memory Recall ──
+    echo -e "  ${BOLD}🧠 Phase 3: Reading token memory from history...${NC}\n"
+    if [ ${#HISTORY_ARR[@]} -gt 0 ]; then
+        echo -ne "  ${DIM}  Savings trend:${NC} "
+        draw_sparkline "${HISTORY_ARR[@]}"
+        echo ""
+        echo -e "  ${DIM}  Last ${#HISTORY_ARR[@]} sessions recalled from .ai-memory/optimizer-stats.json${NC}"
+
+        # Read recent milestone notes from state.md
+        if [ -f ".ai-memory/state.md" ]; then
+            local recent_notes=$(grep "^!" ".ai-memory/state.md" 2>/dev/null | tail -3)
+            if [ -n "$recent_notes" ]; then
+                echo -e "  ${DIM}  Recent milestones:${NC}"
+                while IFS= read -r note; do
+                    local note_text=$(echo "$note" | sed 's/^![[:space:]]*//')
+                    echo -e "    ${CYAN}◆${NC} ${DIM}${note_text}${NC}"
+                done <<< "$recent_notes"
+            fi
+        fi
+    else
+        echo -e "  ${DIM}  No token memory history yet — will accumulate with each save${NC}"
+    fi
+    echo ""
+
+    # ── Phase 4: Mindmap pulse animation ──
+    echo -e "  ${BOLD}🎨 Phase 4: Mindmap pulse animation...${NC}\n"
     print_mindmap_frame 1
     sleep 0.15
 
@@ -3529,7 +3634,7 @@ run_gui() {
     done
     echo ""
 
-    # ── Phase 4: Compression estimate ──
+    # ── Phase 5: Compression estimate ──
     local raw_words=0
     if [ -n "$file_list" ]; then
         raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
@@ -3553,10 +3658,11 @@ run_gui() {
     echo -e "  ${BOLD}Raw Estimate:${NC}       ${RED}$(fmt_num $raw_tokens)${NC} tokens"
     echo -e "  ${BOLD}Optimized Map:${NC}      ${GREEN}$(fmt_num $map_tokens)${NC} tokens"
     echo -e "  ${BOLD}Tokens Saved:${NC}       ${YELLOW}$(fmt_num $saved_tokens)${NC} tokens  ${DIM}(\$$(cost_usd $saved_tokens) est.)${NC}"
-    echo -e "  ${BOLD}Nodes Connected:${NC}    ${CYAN}5${NC} cognitive modules linked"
+    echo -e "  ${BOLD}Nodes Connected:${NC}    ${CYAN}6${NC} cognitive modules linked"
+    echo -e "  ${BOLD}Token Memory:${NC}      ${BRED}$(fmt_num $CUMULATIVE_SAVED)${NC} tokens recalled across ${CYAN}${SESSIONS}${NC} sessions"
     echo ""
 
-    # ── Phase 5: Save prompt ──
+    # ── Phase 6: Save & export token memory graph ──
     echo -e "  ${BOLD}┌─────────────────────────────────────────────────────────┐${NC}"
     echo -e "  ${BOLD}│  💾 Connect nodes and save optimized map + stats? [Y/n]  │${NC}"
     echo -e "  ${BOLD}└─────────────────────────────────────────────────────────┘${NC}"
@@ -3589,11 +3695,14 @@ run_gui() {
 
         run_save --silent
 
+        # Save token memory graph for AI agents to read
+        _save_token_memory_graph "$raw_tokens" "$map_tokens" "$saved_tokens" "$pct"
+
         echo ""
         echo -e "  ${BGREEN}═══════════════════════════════════════════${NC}"
-        echo -e "  ${BGREEN}  ✓ Map and stats successfully saved!${NC}"
+        echo -e "  ${BGREEN}  ✓ Map, stats, and token memory graph saved!${NC}"
         echo -e "  ${BGREEN}═══════════════════════════════════════════${NC}"
-        echo -e "  ${DIM}Storage: .ai-memory/repo-map.txt + optimizer-stats.json${NC}"
+        echo -e "  ${DIM}Storage: .ai-memory/repo-map.txt + optimizer-stats.json + token-memory-graph.json${NC}"
         echo ""
         sleep 0.5
         show_dashboard
