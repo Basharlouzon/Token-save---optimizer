@@ -2,9 +2,9 @@
 
 # 🧠🔋 Tokenso
 
-### *Stop AI agents from wasting tokens, looping, and reading your entire codebase.*
+### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.0.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.4.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,23 +26,27 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.0.0
+## 🆕 What's New in 3.4.0
 
-> **Token Memory Graph** — detect and read token memory across all sessions
+> **Real Tokenizer + Enhanced Memory Graph** — accurate tiktoken counting, cognitive architecture
 
-| Feature | Description |
-|---|---|
+| Feature                       | Description                                                                                                                                     |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🧠 **Token Memory Detection** | `tokenso run` now detects and reads token memory from stats history — a new **[Token Memory]** node displays cumulative savings across sessions |
-| 📈 **Sparkline Trends** | Savings trend visualization with milestone recall from last 10 sessions |
-| 🔗 **6-Phase Mindmap** | Scan → Synapse → Token Memory Recall → Pulse → Compression → Save |
-| 💾 **Machine-Readable Graph** | Saves `.ai-memory/token-memory-graph.json` with nodes and edges for AI agents |
-| 🎯 **Cognitive Synapses** | 6 synapse connections linking Workspace Code, Context Rules, Memory State, Semantic Map, Token Memory, and Tokenso Core |
+| � **Sparkline Trends**        | Savings trend visualization with milestone recall from last 10 sessions                                                                         |
+| � **6-Phase Mindmap**         | Scan → Synapse → Token Memory Recall → Pulse → Compression → Save                                                                               |
+| � **Machine-Readable Graph**  | Saves `.ai-memory/token-memory-graph.json` with nodes and edges for AI agents                                                                   |
+| 🎯 **Cognitive Synapses**     | 6 synapse connections linking Workspace Code, Context Rules, Memory State, Semantic Map, Token Memory, and Tokenso Core                         |
 
 <details>
 <summary><strong>📜 Release History</strong></summary>
 
 <br />
 
+**v3.3.0** — Enhanced memory graph: token distribution, session delta, token density, 10 cognitive nodes
+**v3.2.0** — `tokenso brief` — auto-generate architecture briefing for AI agents
+**v3.1.0** — Memory graph token detection: read token memory across sessions, sparkline trends
+**v3.0.0** — Token Memory Graph, 6-phase mindmap, cognitive synapses, machine-readable graph
 **v2.9.0** — Command polish: symbol-aware search, session subcommands, enhanced status & doctor
 **v2.8.2** — Self-heal for the `tk` alias
 **v2.8.1** — Short alias `tk` for `tokenso`
@@ -125,12 +129,12 @@ Tokenso operates in **three layers**:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Without Tokenso | With Tokenso |
-|---|---|
-| AI runs `ls -R` & reads whole files | AI reads a tiny compressed map (~1%) |
-| AI forgets work and loops | AI writes milestones to `.ai-memory/state.md` |
-| Tokens explode every session | Context stays clean, savings compound |
-| You manually track savings | `tokenso smart` handles everything |
+| Without Tokenso                     | With Tokenso                                  |
+| ----------------------------------- | --------------------------------------------- |
+| AI runs `ls -R` & reads whole files | AI reads a tiny compressed map (~1%)          |
+| AI forgets work and loops           | AI writes milestones to `.ai-memory/state.md` |
+| Tokens explode every session        | Context stays clean, savings compound         |
+| You manually track savings          | `tokenso smart` handles everything            |
 
 ---
 
@@ -138,15 +142,15 @@ Tokenso operates in **three layers**:
 
 `tokenso smart` is designed for AI agents to run at the **start of every session** — 7 steps, zero prompts:
 
-| Step | Action | Auto |
-|------|--------|------|
-| 1 | Auto-init `.ai-memory/` if missing | ✅ |
-| 2 | Refresh stale repo map | ✅ |
-| 3 | Save session stats | ✅ |
-| 4 | Manage background watcher | ✅ |
-| 5 | Diagnose issues (jq, rg, bc, JSON) | ✅ |
-| 6 | Read & return `state.md` | ✅ |
-| 7 | Suggest next actions | ✅ |
+| Step | Action                             | Auto |
+| ---- | ---------------------------------- | ---- |
+| 1    | Auto-init `.ai-memory/` if missing | ✅   |
+| 2    | Refresh stale repo map             | ✅   |
+| 3    | Save session stats                 | ✅   |
+| 4    | Manage background watcher          | ✅   |
+| 5    | Diagnose issues (jq, rg, bc, JSON) | ✅   |
+| 6    | Read & return `state.md`           | ✅   |
+| 7    | Suggest next actions               | ✅   |
 
 ```bash
 tokenso smart            # Text report
@@ -195,13 +199,13 @@ tokenso run
 Launches a **6-phase cognitive mindmap** that scans your workspace, discovers real nodes, reads token memory from history, fires animated synapses, and saves a machine-readable graph:
 
 ```
-  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗ 
+  ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗ ██████╗
   ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║██╔═══██╗
      ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║██║   ██║
      ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║
      ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝
-     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ 
-          Cognitive Mindmap Search  v3.0.0
+     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝
+          Cognitive Mindmap Search  v3.4.0
 
   🔍 Phase 1: Scanning project workspace...
   ◉  Discovered [Workspace Code] ... 47 source files
@@ -229,11 +233,15 @@ Saved to `.ai-memory/token-memory-graph.json` for AI agents:
   "version": "3.0.0",
   "nodes": {
     "workspace_code": { "raw_tokens": 148200, "files": 47 },
-    "semantic_map":   { "map_tokens": 1240, "compression_pct": 99 },
-    "token_memory":   { "sessions": 35, "cumulative_saved": 972764 }
+    "semantic_map": { "map_tokens": 1240, "compression_pct": 99 },
+    "token_memory": { "sessions": 35, "cumulative_saved": 972764 }
   },
   "edges": [
-    { "from": "token_memory", "to": "semantic_map", "data": "history→compression trend" }
+    {
+      "from": "token_memory",
+      "to": "semantic_map",
+      "data": "history→compression trend"
+    }
   ]
 }
 ```
@@ -311,30 +319,30 @@ The state file (`.ai-memory/state.md`) tracks completed tasks, next actions, blo
 
 ### Daily Use
 
-| Command | Description |
-|---|---|
-| `tk` | Smart status — tokens saved, next action |
-| `tk save` | Update repo map & record token stats |
-| `tk save "note"` | Save stats with a milestone note |
-| `tk search <q>` | Zero-waste codebase search |
-| `tk state` | View & edit AI memory checklist |
-| `tk stats` | Detailed token report |
-| `tk stats --html` | Premium HTML dashboard |
-| `tk run` | Cognitive mindmap with token memory graph |
-| `tk map` | Colorized repository structure tree |
-| `tk smart` | AI agent autopilot |
+| Command           | Description                               |
+| ----------------- | ----------------------------------------- |
+| `tk`              | Smart status — tokens saved, next action  |
+| `tk save`         | Update repo map & record token stats      |
+| `tk save "note"`  | Save stats with a milestone note          |
+| `tk search <q>`   | Zero-waste codebase search                |
+| `tk state`        | View & edit AI memory checklist           |
+| `tk stats`        | Detailed token report                     |
+| `tk stats --html` | Premium HTML dashboard                    |
+| `tk run`          | Cognitive mindmap with token memory graph |
+| `tk map`          | Colorized repository structure tree       |
+| `tk smart`        | AI agent autopilot                        |
 
 ### Management (`tk config <subcommand>`)
 
-| Command | Description |
-|---|---|
-| `tk config install` | Project setup wizard |
+| Command                 | Description                |
+| ----------------------- | -------------------------- |
+| `tk config install`     | Project setup wizard       |
 | `tk config watch start` | Start background auto-save |
-| `tk config watch stop` | Stop the daemon |
-| `tk config update` | Self-update from GitHub |
-| `tk config doctor` | Environment diagnostics |
-| `tk config clean` | Wipe cached files |
-| `tk config reset` | Clear cumulative stats |
+| `tk config watch stop`  | Stop the daemon            |
+| `tk config update`      | Self-update from GitHub    |
+| `tk config doctor`      | Environment diagnostics    |
+| `tk config clean`       | Wipe cached files          |
+| `tk config reset`       | Clear cumulative stats     |
 
 > **Tip:** `tk` is a short alias for `tokenso` — both work everywhere. All old commands (`tokenso install`, etc.) still work with a redirect hint.
 
@@ -350,9 +358,11 @@ source ~/.zshrc    # or ~/.bashrc — pick up the new PATH
 ```
 
 If still missing:
+
 ```bash
 echo "$PATH" | tr ':' '\n' | grep -E '(/usr/local/bin|\.local/bin)'
 ```
+
 </details>
 
 <details>
@@ -364,36 +374,41 @@ curl -fsSL https://raw.githubusercontent.com/Basharlouzon/Token-save---optimizer
 ```
 
 macOS Gatekeeper: `xattr -d com.apple.quarantine /usr/local/bin/tokenso`
+
 </details>
 
 <details>
 <summary><strong>Missing dependencies</strong></summary>
 
-| Tool | Improves | Without it |
-|---|---|---|
-| `jq` | JSON parsing | grep/awk fallback |
-| `bc` | Precision math | awk fallback |
-| `rg` | Fast search | find/grep fallback |
-| `tree` | Pretty maps | flat find listing |
-| `perl` | Search highlighting | sed fallback |
+| Tool   | Improves            | Without it         |
+| ------ | ------------------- | ------------------ |
+| `jq`   | JSON parsing        | grep/awk fallback  |
+| `bc`   | Precision math      | awk fallback       |
+| `rg`   | Fast search         | find/grep fallback |
+| `tree` | Pretty maps         | flat find listing  |
+| `perl` | Search highlighting | sed fallback       |
 
 Install: `brew install jq ripgrep tree` or `apt install jq ripgrep tree`
+
 </details>
 
 <details>
 <summary><strong>Corrupt stats / reinstall / uninstall</strong></summary>
 
 **Reset stats:**
+
 ```bash
 tokenso reset
 ```
 
 **Uninstall:**
+
 ```bash
 tokenso watch stop 2>/dev/null
 rm -f "$(command -v tokenso)" "$HOME/.tokenso_completion.sh"
 # Remove marker-bracketed blocks from ~/.zshrc or ~/.bashrc
 ```
+
 </details>
 
 ---
@@ -402,34 +417,34 @@ rm -f "$(command -v tokenso)" "$HOME/.tokenso_completion.sh"
 
 ### AI Coding Agents
 
-| Tool | Config |
-|---|---|
-| Claude Code | `.claudecode` + `CLAUDE.md` |
-| Cline | `.clinerules` |
-| Roo Code | `.roomodes` |
-| Kilo | `.kilorules` |
-| Gemini CLI | `.geminirules` |
-| Open Code | `.opencode` |
-| Aider | `CONVENTIONS.md` + `.aider.conf.yml` |
-| Continue.dev | `.continue/config.yaml` |
-| ⭐ Antigravity | Global skill + `.geminirules` |
+| Tool           | Config                               |
+| -------------- | ------------------------------------ |
+| Claude Code    | `.claudecode` + `CLAUDE.md`          |
+| Cline          | `.clinerules`                        |
+| Roo Code       | `.roomodes`                          |
+| Kilo           | `.kilorules`                         |
+| Gemini CLI     | `.geminirules`                       |
+| Open Code      | `.opencode`                          |
+| Aider          | `CONVENTIONS.md` + `.aider.conf.yml` |
+| Continue.dev   | `.continue/config.yaml`              |
+| ⭐ Antigravity | Global skill + `.geminirules`        |
 
 ### AI-Powered Editors
 
-| Tool | Config |
-|---|---|
-| Cursor | `.cursorrules` + `.cursor/rules/` |
-| Windsurf | `.windsurfrules` |
-| Void Editor | `.voidrules` |
-| Zed AI | `.zed/assistant-rules.md` |
-| PearAI | `.pearai` |
+| Tool        | Config                            |
+| ----------- | --------------------------------- |
+| Cursor      | `.cursorrules` + `.cursor/rules/` |
+| Windsurf    | `.windsurfrules`                  |
+| Void Editor | `.voidrules`                      |
+| Zed AI      | `.zed/assistant-rules.md`         |
+| PearAI      | `.pearai`                         |
 
 ### Enterprise & Cloud
 
-| Tool | Config |
-|---|---|
-| GitHub Copilot | `.github/copilot-instructions.md` |
-| Amazon Q Developer | `.amazonq/rules/` |
+| Tool               | Config                            |
+| ------------------ | --------------------------------- |
+| GitHub Copilot     | `.github/copilot-instructions.md` |
+| Amazon Q Developer | `.amazonq/rules/`                 |
 
 ---
 
