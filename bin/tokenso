@@ -415,6 +415,7 @@ _show_commands() {
     echo -e "  ${CYAN}smart${NC}     AI agent autopilot: auto-init, refresh, save, diagnose, report"
     echo -e "  ${CYAN}symbols${NC}   View/filter the symbol map (function/class/type index)"
     echo -e "  ${CYAN}wrap${NC}      Run an agent CLI and record real session metrics (e.g. ${DIM}tokenso wrap claude -p ... --output-format stream-json${NC})"
+    echo -e "  ${CYAN}brief${NC}     Auto-generate architecture briefing for AI agents"
     echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
@@ -4887,6 +4888,335 @@ run_smart_status() {
     echo ""
 }
 
+# ─── BRIEF (Architecture Briefing Generator) ───────────────────────────────
+run_brief() {
+    local save_flag=false
+    local json_flag=false
+    for arg in "$@"; do
+        case "$arg" in
+            --save|-s)   save_flag=true ;;
+            --json|-j)   json_flag=true ;;
+        esac
+    done
+
+    local project_name
+    project_name=$(basename "$(pwd)")
+
+    # ── Detect languages by file extension frequency (Bash 3.2 safe: temp file) ──
+    local file_list
+    file_list=$(list_source_files)
+    local tmp_langs
+    tmp_langs=$(mktemp)
+    local total_ext_files=0
+    if [ -n "$file_list" ]; then
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            local ext="${f##*.}"
+            ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+            local lang=""
+            case "$ext" in
+                ts|tsx)                  lang="TypeScript" ;;
+                js|jsx|mjs|cjs)          lang="JavaScript" ;;
+                py)                      lang="Python" ;;
+                rs)                      lang="Rust" ;;
+                go)                      lang="Go" ;;
+                java)                    lang="Java" ;;
+                kt|kts)                  lang="Kotlin" ;;
+                swift)                   lang="Swift" ;;
+                dart)                    lang="Dart" ;;
+                rb)                      lang="Ruby" ;;
+                php)                     lang="PHP" ;;
+                cs)                      lang="C#" ;;
+                c|h)                     lang="C" ;;
+                cpp|hpp|cc|cxx)          lang="C++" ;;
+                scala)                   lang="Scala" ;;
+                sh|bash)                 lang="Shell" ;;
+                css|scss|sass|less)      lang="CSS" ;;
+                html|htm)                lang="HTML" ;;
+                sql)                     lang="SQL" ;;
+                yaml|yml)                lang="YAML" ;;
+                json)                    lang="JSON" ;;
+                md|mdx)                  lang="Markdown" ;;
+                *)                       lang="Other" ;;
+            esac
+            if [ -n "$lang" ]; then
+                local cur
+                cur=$(grep -c "^${lang}|" "$tmp_langs" 2>/dev/null) || cur=0
+                if [ "$cur" -gt 0 ]; then
+                    local new_count=$(( cur + 1 ))
+                    sed -i '' "s/^${lang}|.*/${lang}|${new_count}/" "$tmp_langs" 2>/dev/null || \
+                        sed -i "s/^${lang}|.*/${lang}|${new_count}/" "$tmp_langs" 2>/dev/null
+                else
+                    echo "${lang}|1" >> "$tmp_langs"
+                fi
+                total_ext_files=$(( total_ext_files + 1 ))
+            fi
+        done <<< "$file_list"
+    fi
+
+    # Sort by count descending, build display string for top 5
+    local lang_display=""
+    if [ -s "$tmp_langs" ]; then
+        local top_langs
+        top_langs=$(sort -t'|' -k2 -rn "$tmp_langs" | head -5)
+        while IFS='|' read -r lang count; do
+            [ -z "$lang" ] && continue
+            local pct=0
+            [ "$total_ext_files" -gt 0 ] && pct=$(( count * 100 / total_ext_files ))
+            lang_display="${lang_display}${lang} (${pct}%), "
+        done <<< "$top_langs"
+        lang_display="${lang_display%, }"
+    fi
+    rm -f "$tmp_langs"
+
+    # ── Detect frameworks ──
+    local framework=""
+    if [ -f "package.json" ]; then
+        local deps=""
+        if command -v jq &>/dev/null; then
+            deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys[]' package.json 2>/dev/null | tr '\n' ' ')
+        else
+            deps=$(grep -oE '"[a-z@][a-z0-9@/\-]*"' package.json 2>/dev/null | tr -d '"' | head -30 | tr '\n' ' ')
+        fi
+        if echo "$deps" | grep -q "next"; then framework="Next.js"
+        elif echo "$deps" | grep -q "nuxt"; then framework="Nuxt"
+        elif echo "$deps" | grep -q "svelte"; then framework="SvelteKit"
+        elif echo "$deps" | grep -q "@angular/core"; then framework="Angular"
+        elif echo "$deps" | grep -q "vue"; then framework="Vue"
+        elif echo "$deps" | grep -q "express"; then framework="Express"
+        elif echo "$deps" | grep -q "fastify"; then framework="Fastify"
+        elif echo "$deps" | grep -q "react"; then framework="React"
+        fi
+    fi
+    [ -f "pubspec.yaml" ] && framework="Flutter/Dart"
+    [ -f "Cargo.toml" ] && [ -z "$framework" ] && framework="Rust (Cargo)"
+    [ -f "go.mod" ] && [ -z "$framework" ] && framework="Go Modules"
+    [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] && [ -z "$framework" ] && framework="Gradle (Java/Kotlin)"
+    [ -f "Gemfile" ] && [ -z "$framework" ] && framework="Ruby (Bundler)"
+    [ -f "pyproject.toml" ] || [ -f "requirements.txt" ] && [ -z "$framework" ] && framework="Python"
+
+    # ── Detect runtime ──
+    local runtime=""
+    [ -f "package.json" ] && runtime="Node.js"
+    [ -f ".nvmrc" ] && runtime="Node.js (via nvm)"
+    [ -f ".python-version" ] && runtime="Python"
+    [ -f "pubspec.yaml" ] && runtime="Dart/Flutter SDK"
+    [ -f "Cargo.toml" ] && runtime="Rust toolchain"
+    [ -f "go.mod" ] && runtime="Go"
+
+    # ── Detect package manager ──
+    local pkg_manager=""
+    [ -f "pnpm-lock.yaml" ] && pkg_manager="pnpm"
+    [ -f "yarn.lock" ] && pkg_manager="Yarn"
+    [ -f "package-lock.json" ] && pkg_manager="npm"
+    [ -f "bun.lockb" ] && pkg_manager="Bun"
+    [ -f "Pipfile" ] && pkg_manager="Pipenv"
+    [ -f "poetry.lock" ] && pkg_manager="Poetry"
+    [ -f "uv.lock" ] && pkg_manager="uv"
+
+    # ── Map directory structure with file counts (Bash 3.2 safe: temp file) ──
+    local tmp_dirs
+    tmp_dirs=$(mktemp)
+    if [ -n "$file_list" ]; then
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            local clean="${f#./}"
+            local dir="${clean%%/*}"
+            if [ "$dir" = "$clean" ]; then
+                dir="(root)"
+            fi
+            local cur_d
+            cur_d=$(grep -c "^${dir}|" "$tmp_dirs" 2>/dev/null) || cur_d=0
+            if [ "$cur_d" -gt 0 ]; then
+                local new_d=$(( cur_d + 1 ))
+                sed -i '' "s/^${dir}|.*/${dir}|${new_d}/" "$tmp_dirs" 2>/dev/null || \
+                    sed -i "s/^${dir}|.*/${dir}|${new_d}/" "$tmp_dirs" 2>/dev/null
+            else
+                echo "${dir}|1" >> "$tmp_dirs"
+            fi
+        done <<< "$file_list"
+    fi
+
+    local dir_display=""
+    if [ -s "$tmp_dirs" ]; then
+        local top_dirs
+        top_dirs=$(sort -t'|' -k2 -rn "$tmp_dirs" | head -10)
+        while IFS='|' read -r dir count; do
+            [ -z "$dir" ] && continue
+            dir_display="${dir_display}  - ${dir}/ → ${count} files
+"
+        done <<< "$top_dirs"
+    fi
+    rm -f "$tmp_dirs"
+
+    # ── Find entry points ──
+    local entry_points=""
+    for candidate in \
+        "src/main.ts" "src/main.tsx" "src/index.ts" "src/index.tsx" \
+        "src/app/layout.tsx" "src/app/page.tsx" "src/pages/index.tsx" \
+        "main.py" "app.py" "manage.py" "src/main.py" \
+        "lib/main.dart" "web/main.dart" \
+        "main.go" "cmd/main.go" \
+        "src/main.rs" "src/lib.rs" \
+        "index.js" "index.ts" "server.js" "server.ts" \
+        "next.config.js" "next.config.mjs" "next.config.ts" \
+        "nuxt.config.ts" "vite.config.ts" "vue.config.js" \
+        "angular.json" "svelte.config.js" \
+        "pubspec.yaml" "Cargo.toml" "go.mod" \
+        "Makefile" "docker-compose.yml" "Dockerfile"; do
+        [ -f "$candidate" ] && entry_points="${entry_points}  - ${candidate}
+"
+    done
+
+    # ── Extract top dependencies ──
+    local top_deps=""
+    if [ -f "package.json" ] && command -v jq &>/dev/null; then
+        top_deps=$(jq -r '(.dependencies // {}) | keys[]' package.json 2>/dev/null | head -15 | tr '\n' ', ' | sed 's/,$//')
+    elif [ -f "requirements.txt" ]; then
+        top_deps=$(head -15 requirements.txt | sed 's/[<>=!].*//' | sed 's/\[.*//g' | tr '\n' ', ' | sed 's/,$//')
+    elif [ -f "pubspec.yaml" ]; then
+        if command -v yq &>/dev/null; then
+            top_deps=$(yq -r '.dependencies | keys | join(", ")' pubspec.yaml 2>/dev/null | head -c 200)
+        else
+            top_deps=$(grep -A50 'dependencies:' pubspec.yaml 2>/dev/null | grep -v '^#' | grep ':' | head -15 | cut -d: -f1 | tr '\n' ', ' | sed 's/,$//')
+        fi
+    fi
+
+    # ── Detect key patterns ──
+    local patterns=""
+    [ -f "next.config.js" ] || [ -f "next.config.mjs" ] || [ -f "next.config.ts" ] && patterns="${patterns}  - Next.js App Router (or Pages Router)
+"
+    [ -d "src/app" ] && patterns="${patterns}  - App Router (Next.js 13+)
+"
+    [ -d "src/pages" ] && patterns="${patterns}  - Pages Router (Next.js legacy)
+"
+    [ -f "prisma/schema.prisma" ] && patterns="${patterns}  - Prisma ORM
+"
+    [ -f "drizzle.config.ts" ] && patterns="${patterns}  - Drizzle ORM
+"
+    [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ] && patterns="${patterns}  - Docker Compose
+"
+    [ -f "Dockerfile" ] && patterns="${patterns}  - Docker
+"
+    [ -d ".github/workflows" ] && patterns="${patterns}  - GitHub Actions CI/CD
+"
+    [ -f ".env.example" ] || [ -f ".env.local" ] && patterns="${patterns}  - Environment-based config
+"
+    [ -f "tailwind.config.js" ] || [ -f "tailwind.config.ts" ] && patterns="${patterns}  - Tailwind CSS
+"
+    [ -f "tsconfig.json" ] && patterns="${patterns}  - TypeScript strict mode
+"
+    [ -f "biome.json" ] && patterns="${patterns}  - Biome linter/formatter
+"
+    [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ] && patterns="${patterns}  - ESLint
+"
+    [ -f "vitest.config.ts" ] && patterns="${patterns}  - Vitest testing
+"
+    [ -f "jest.config.js" ] || [ -f "jest.config.ts" ] && patterns="${patterns}  - Jest testing
+"
+
+    # ── Calculate token stats ──
+    local raw_words=0
+    [ -n "$file_list" ] && raw_words=$(echo "$file_list" | tr '\n' '\0' | xargs -0 wc -w 2>/dev/null | tail -1 | awk '{print $1}')
+    [ -z "$raw_words" ] && raw_words=0
+    local raw_tokens=$(( raw_words * 13 / 10 ))
+
+    # Brief is approximately 60 lines ≈ ~800 words ≈ ~1040 tokens
+    local brief_tokens=1040
+    local reduction_pct=0
+    [ "$raw_tokens" -gt 0 ] && reduction_pct=$(( (raw_tokens - brief_tokens) * 100 / raw_tokens ))
+
+    # ── Output ──
+    if $json_flag; then
+        # JSON output (build safely)
+        echo "{"
+        echo "  \"project\": \"$project_name\","
+        echo "  \"languages\": \"$lang_display\","
+        echo "  \"framework\": \"$framework\","
+        echo "  \"runtime\": \"$runtime\","
+        echo "  \"package_manager\": \"$pkg_manager\","
+        echo "  \"raw_tokens\": $raw_tokens,"
+        echo "  \"brief_tokens\": $brief_tokens,"
+        echo "  \"reduction_pct\": $reduction_pct"
+        echo "}"
+        return 0
+    fi
+
+    # Text output — use echo/echo -e to avoid printf %% issues
+    echo "# Architecture Brief — ${project_name}"
+    echo "> Auto-generated by tokenso brief v${VERSION} on $(date +"%Y-%m-%d %H:%M")"
+    echo ""
+    echo "## Stack"
+    [ -n "$lang_display" ] && echo "- Languages: ${lang_display}"
+    [ -n "$runtime" ] && echo "- Runtime: ${runtime}"
+    [ -n "$framework" ] && echo "- Framework: ${framework}"
+    [ -n "$pkg_manager" ] && echo "- Package Manager: ${pkg_manager}"
+    echo ""
+    echo "## Structure"
+    echo "${dir_display}"
+    if [ -n "$entry_points" ]; then
+        echo "## Entry Points"
+        echo "${entry_points}"
+    fi
+    if [ -n "$patterns" ]; then
+        echo "## Key Patterns"
+        echo "${patterns}"
+    fi
+    if [ -n "$top_deps" ]; then
+        echo "## Dependencies (top 15)"
+        echo "${top_deps}"
+    fi
+    echo ""
+    echo "## Token Estimate"
+    echo "- Full codebase: ~$(fmt_num $raw_tokens) tokens"
+    echo "- This brief: ~${brief_tokens} tokens"
+    echo "- Reduction: ~${reduction_pct}%"
+    echo ""
+
+    # Save if requested
+    if $save_flag; then
+        mkdir -p .ai-memory
+        {
+            echo "# Architecture Brief — ${project_name}"
+            echo "> Auto-generated by tokenso brief v${VERSION} on $(date +"%Y-%m-%d %H:%M")"
+            echo ""
+            echo "## Stack"
+            [ -n "$lang_display" ] && echo "- Languages: ${lang_display}"
+            [ -n "$runtime" ] && echo "- Runtime: ${runtime}"
+            [ -n "$framework" ] && echo "- Framework: ${framework}"
+            [ -n "$pkg_manager" ] && echo "- Package Manager: ${pkg_manager}"
+            echo ""
+            echo "## Structure"
+            echo "${dir_display}"
+            if [ -n "$entry_points" ]; then
+                echo "## Entry Points"
+                echo "${entry_points}"
+            fi
+            if [ -n "$patterns" ]; then
+                echo "## Key Patterns"
+                echo "${patterns}"
+            fi
+            if [ -n "$top_deps" ]; then
+                echo "## Dependencies (top 15)"
+                echo "${top_deps}"
+            fi
+            echo ""
+            echo "## Token Estimate"
+            echo "- Full codebase: ~$(fmt_num $raw_tokens) tokens"
+            echo "- This brief: ~${brief_tokens} tokens"
+            echo "- Reduction: ~${reduction_pct}%"
+        } > ".ai-memory/ARCHITECTURE.md"
+        echo ""
+        echo -e "${GREEN}✅ Saved to .ai-memory/ARCHITECTURE.md${NC}"
+    fi
+
+    echo -e "${DIM}─────────────────────────────────────────${NC}"
+    echo -e "${DIM}Paste this brief into any AI agent's context for instant codebase awareness.${NC}"
+    if ! $save_flag; then
+        echo -e "${DIM}Use ${CYAN}tokenso brief --save${NC} to write to .ai-memory/ARCHITECTURE.md${NC}"
+    fi
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
@@ -4940,6 +5270,10 @@ case "$1" in
     wrap)
         shift
         run_wrap "$@"
+        ;;
+    brief)
+        shift
+        run_brief "$@"
         ;;
     sessions)
         shift
