@@ -184,6 +184,184 @@ _read_memory_graph_json() {
     fi
 }
 
+# ── Real tokenizer support (tiktoken cl100k_base) ──
+_count_tokens_tiktoken() {
+    # Count real tokens using tiktoken (cl100k_base = GPT-4/Claude encoding)
+    # Args: [file_path] or stdin
+    # Returns: integer token count
+    if [ -n "$1" ] && [ -f "$1" ]; then
+        python3 -c "
+import tiktoken, sys
+enc = tiktoken.get_encoding('cl100k_base')
+with open(sys.argv[1], 'r', errors='replace') as f:
+    print(len(enc.encode(f.read())))
+" "$1" 2>/dev/null
+    else
+        python3 -c "
+import tiktoken, sys
+enc = tiktoken.get_encoding('cl100k_base')
+print(len(enc.encode(sys.stdin.read())))
+" 2>/dev/null
+    fi
+}
+
+_count_tokens() {
+    # Smart token counter: uses tiktoken if available, falls back to words×13/10
+    # Args: file_path
+    local file=$1
+    [ -z "$file" ] && echo "0" && return
+    [ ! -f "$file" ] && echo "0" && return
+
+    _detect_tokenizer
+    if [ "$_TOKENIZER_TYPE" = "tiktoken" ]; then
+        local result=$(_count_tokens_tiktoken "$file")
+        [ -n "$result" ] && [ "$result" -gt 0 ] 2>/dev/null && echo "$result" && return
+    fi
+
+    # Fallback: words × 13/10
+    local words=$(wc -w < "$file" 2>/dev/null || echo 0)
+    echo $(( words * 13 / 10 ))
+}
+
+_count_tokens_string() {
+    # Count tokens from a string (stdin or arg)
+    local input
+    if [ -n "$1" ]; then
+        input="$1"
+    else
+        input=$(cat)
+    fi
+
+    _detect_tokenizer
+    if [ "$_TOKENIZER_TYPE" = "tiktoken" ]; then
+        local result=$(echo "$input" | _count_tokens_tiktoken)
+        [ -n "$result" ] && [ "$result" -gt 0 ] 2>/dev/null && echo "$result" && return
+    fi
+
+    # Fallback
+    local words=$(echo "$input" | wc -w | tr -d ' ')
+    echo $(( words * 13 / 10 ))
+}
+
+# ─── GRAPH (Read Token Memory Graph) ────────────────────────────────────────
+run_graph() {
+    local graph_file=".ai-memory/token-memory-graph.json"
+    local format="${1:-text}"
+
+    if [ ! -f "$graph_file" ] || [ ! -s "$graph_file" ]; then
+        echo -e "${YELLOW}⚠️  No token memory graph found.${NC}"
+        echo -e "   Run ${CYAN}tokenso save${NC} or ${CYAN}tokenso run${NC} to generate one."
+        return 1
+    fi
+
+    if [ "$format" = "--json" ] || [ "$format" = "-j" ]; then
+        cat "$graph_file"
+        return 0
+    fi
+
+    # ── Read graph data ──
+    local schema version generated project
+    if command -v jq &>/dev/null; then
+        schema=$(jq -r '.schema // 1' "$graph_file" 2>/dev/null)
+        version=$(jq -r '.version // "?"' "$graph_file" 2>/dev/null)
+        generated=$(jq -r '.generated // "?"' "$graph_file" 2>/dev/null)
+        project=$(jq -r '.project // "?"' "$graph_file" 2>/dev/null)
+    else
+        schema=$(grep -o '"schema"[ :]*[0-9]*' "$graph_file" | head -1 | grep -o '[0-9]*$')
+        version=$(grep -o '"version"[ :]*"[^"]*"' "$graph_file" | head -1 | cut -d'"' -f4)
+        generated=$(grep -o '"generated"[ :]*"[^"]*"' "$graph_file" | head -1 | cut -d'"' -f4)
+        project=$(grep -o '"project"[ :]*"[^"]*"' "$graph_file" | head -1 | cut -d'"' -f4)
+    fi
+
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "${BGREEN}🧠 Token Memory Graph${NC}  ${DIM}schema v${schema} · v${version}${NC}"
+    echo -e "${BCYAN}======================================================${NC}"
+    echo -e "  ${BOLD}Project:${NC}    ${CYAN}${project}${NC}"
+    echo -e "  ${BOLD}Generated:${NC}  ${DIM}${generated}${NC}"
+    echo ""
+
+    # ── Nodes ──
+    echo -e "  ${BOLD}── COGNITIVE NODES ──────────────────────────────────${NC}"
+
+    # workspace_code
+    local ws_tokens ws_files
+    ws_tokens=$(jq -r '.nodes.workspace_code.raw_tokens // 0' "$graph_file" 2>/dev/null)
+    ws_files=$(jq -r '.nodes.workspace_code.files // 0' "$graph_file" 2>/dev/null)
+    echo -e "  ${BCYAN}📁 Workspace Code${NC}"
+    echo -e "     Raw tokens: $(fmt_num ${ws_tokens:-0})  ·  Files: ${ws_files:-0}"
+    echo ""
+
+    # semantic_map
+    local sm_tokens sm_pct
+    sm_tokens=$(jq -r '.nodes.semantic_map.map_tokens // 0' "$graph_file" 2>/dev/null)
+    sm_pct=$(jq -r '.nodes.semantic_map.compression_pct // 0' "$graph_file" 2>/dev/null)
+    echo -e "  ${BGREEN}🗺️  Semantic Map${NC}"
+    echo -e "     Map tokens: $(fmt_num ${sm_tokens:-0})  ·  Compression: ${sm_pct:-0}%"
+    echo ""
+
+    # token_memory
+    local tm_sessions tm_cumulative tm_trend tm_avg tm_peak tm_eff
+    tm_sessions=$(jq -r '.nodes.token_memory.sessions // 0' "$graph_file" 2>/dev/null)
+    tm_cumulative=$(jq -r '.nodes.token_memory.cumulative_saved // 0' "$graph_file" 2>/dev/null)
+    tm_trend=$(jq -r '.nodes.token_memory.trend // "stable"' "$graph_file" 2>/dev/null)
+    tm_avg=$(jq -r '.nodes.token_memory.avg_per_session // 0' "$graph_file" 2>/dev/null)
+    tm_peak=$(jq -r '.nodes.token_memory.peak_session // 0' "$graph_file" 2>/dev/null)
+    tm_eff=$(jq -r '.nodes.token_memory.efficiency_pct // 0' "$graph_file" 2>/dev/null)
+    local trend_icon="●"
+    local trend_color="$YELLOW"
+    [ "$tm_trend" = "improving" ] && trend_icon="📈" && trend_color="$BGREEN"
+    [ "$tm_trend" = "declining" ] && trend_icon="📉" && trend_color="$RED"
+    echo -e "  ${BRED}🧠 Token Memory${NC}"
+    echo -e "     Sessions: ${tm_sessions}  ·  Cumulative: $(fmt_num ${tm_cumulative:-0}) tokens"
+    echo -e "     Avg/session: $(fmt_num ${tm_avg:-0})  ·  Peak: $(fmt_num ${tm_peak:-0})  ·  Efficiency: ${tm_eff}%"
+    echo -e "     Trend: ${trend_color}${trend_icon} ${tm_trend}${NC}"
+    echo ""
+
+    # observed_metrics
+    local obs_sessions obs_reads obs_edits obs_bytes
+    obs_sessions=$(jq -r '.nodes.observed_metrics.total_wrap_sessions // 0' "$graph_file" 2>/dev/null)
+    obs_reads=$(jq -r '.nodes.observed_metrics.total_reads // 0' "$graph_file" 2>/dev/null)
+    obs_edits=$(jq -r '.nodes.observed_metrics.total_edits // 0' "$graph_file" 2>/dev/null)
+    obs_bytes=$(jq -r '.nodes.observed_metrics.total_bytes_read // 0' "$graph_file" 2>/dev/null)
+    if [ "${obs_sessions:-0}" -gt 0 ]; then
+        echo -e "  ${YELLOW}📊 Observed Metrics${NC}  ${DIM}(real from tokenso wrap)${NC}"
+        echo -e "     Wrap sessions: ${obs_sessions}  ·  Reads: ${obs_reads}  ·  Edits: ${obs_edits}"
+        echo -e "     Bytes read: $(fmt_num ${obs_bytes:-0})"
+        echo ""
+    fi
+
+    # token_distribution
+    local td_density
+    td_density=$(jq -r '.nodes.token_distribution.token_density // 0' "$graph_file" 2>/dev/null)
+    echo -e "  ${MAGENTA}📊 Token Distribution${NC}"
+    echo -e "     Token density: $(fmt_num ${td_density:-0}) tokens/file"
+    jq -r '.nodes.token_distribution.directories[]? | "     \(.dir)/ → \(.tokens) tokens"' "$graph_file" 2>/dev/null
+    echo ""
+
+    # session_delta
+    local delta_tokens delta_pct
+    delta_tokens=$(jq -r '.nodes.session_delta.tokens // 0' "$graph_file" 2>/dev/null)
+    delta_pct=$(jq -r '.nodes.session_delta.pct // 0' "$graph_file" 2>/dev/null)
+    if [ "${delta_tokens:-0}" -ne 0 ]; then
+        local delta_color="$BGREEN"
+        [ "$delta_tokens" -lt 0 ] && delta_color="$RED"
+        echo -e "  ${CYAN}📈 Session Delta${NC}"
+        echo -e "     Change: ${delta_color}$(fmt_num ${delta_tokens})${NC} tokens (${delta_pct}%)"
+        echo ""
+    fi
+
+    # ── Edges ──
+    local edge_count
+    edge_count=$(jq '.edges | length' "$graph_file" 2>/dev/null || echo 0)
+    echo -e "  ${BOLD}── COGNITIVE SYNAPSES ──────────────────────────────${NC}"
+    jq -r '.edges[]? | "  \(.from) ═══> \(.to)  \(.data)"' "$graph_file" 2>/dev/null \
+        | sed 's/\(═══>\)/'"${YELLOW}\1${NC}"'/g'
+    echo ""
+    echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+    echo -e "  ${DIM}${edge_count} synapse connections · Use ${CYAN}tokenso graph --json${NC} for raw JSON${NC}"
+    echo ""
+}
+
 # Prefer `jq` for correctness; fall back to a small grep/awk reader for the
 # four fields we actually use. The fallback cannot handle escaped quotes or
 # values inside nested objects — schema is flat by design.
@@ -476,6 +654,7 @@ _show_commands() {
     echo -e "  ${CYAN}symbols${NC}   View/filter the symbol map (function/class/type index)"
     echo -e "  ${CYAN}wrap${NC}      Run an agent CLI and record real session metrics (e.g. ${DIM}tokenso wrap claude -p ... --output-format stream-json${NC})"
     echo -e "  ${CYAN}brief${NC}     Auto-generate architecture briefing for AI agents"
+    echo -e "  ${CYAN}graph${NC}     Read token memory graph (use --json for raw)"
     echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
@@ -5391,6 +5570,10 @@ case "$1" in
     brief)
         shift
         run_brief "$@"
+        ;;
+    graph)
+        shift
+        run_graph "$@"
         ;;
     sessions)
         shift
