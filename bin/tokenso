@@ -70,6 +70,10 @@ _pad_decimal() {
 cost_usd()      { _pad_decimal "$(_cost_compute "$1" "$COST_PER_1M")"; }
 cost_usd_rate() { _pad_decimal "$(_cost_compute "$1" "$2")"; }
 
+# Escape a string for safe embedding inside a <script> JSON literal.
+# Prevents XSS via </script>, backslashes, and double-quotes.
+_js_escape() { echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/</\\x3c/g; s/>/\\x3e/g'; }
+
 detect_tools() {
     local found=()
     [ -f ".claudecode" ]                          && found+=("Claude Code")
@@ -885,7 +889,7 @@ generate_html_dashboard() {
     local cost_saved=$(cost_usd $saved_tokens)
     local cost_cum=$(cost_usd $CUMULATIVE_SAVED)
     local date_exported=$(date +"%Y-%m-%d %H:%M")
-    local project_name=$(basename "$(pwd)")
+    local project_name=$(_js_escape "$(basename "$(pwd)")")
 
     # ─── Aggregate observed wrap-session metrics (real, not estimated) ──
     local wrap_sessions=0
@@ -904,8 +908,8 @@ generate_html_dashboard() {
             wrap_bytes_read=$(jq -s '[.[].observed.bytes_read_est // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
         fi
         for v in wrap_reads wrap_searches wrap_bash wrap_edits wrap_bytes_read; do
-            if [ -z "$(eval echo \$$v)" ] || [ "$(eval echo \$$v)" = "null" ]; then
-                eval "$v=0"
+            if [ -z "${!v}" ] || [ "${!v}" = "null" ]; then
+                declare "$v=0"
             fi
         done
     fi
@@ -925,7 +929,7 @@ generate_html_dashboard() {
         local milestones=()
         while IFS= read -r line || [ -n "$line" ]; do
             if [[ "$line" =~ ^\![[:space:]]*(.*) ]]; then
-                local ms=$(echo "${BASH_REMATCH[1]}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+                local ms=$(_js_escape "${BASH_REMATCH[1]}")
                 milestones+=("\"$ms\"")
             fi
         done < ".ai-memory/state.md"
@@ -941,6 +945,10 @@ generate_html_dashboard() {
             milestones_json="[$joined]"
         fi
     fi
+
+    local safe_agents=$(_js_escape "$active_agents")
+    local safe_version=$(_js_escape "$VERSION")
+    local safe_date=$(_js_escape "$date_exported")
 
     cat << EOF > "$out_file"
 <!DOCTYPE html>
@@ -961,10 +969,10 @@ generate_html_dashboard() {
 
     <script>
     window.TOKENSO_DATA = {
-        version: "${VERSION}",
+        version: "${safe_version}",
         projectName: "${project_name}",
-        dateExported: "${date_exported}",
-        activeAgents: "${active_agents}",
+        dateExported: "${safe_date}",
+        activeAgents: "${safe_agents}",
         filesCount: ${files_count},
         symbolCount: ${symbol_count},
         rawTokens: ${raw_tokens},
@@ -1307,7 +1315,9 @@ EOF
             .toast,
             .roi-flex .slider,
             .model-select-grid,
-            .chart-point:hover { display: none !important; }
+            .chart-point:hover,
+            #btn-copy-md,
+            #btn-print { display: none !important; }
             .panel-subtitle, .stat-info h3, .details-item span:first-child { color: #555 !important; }
             footer p, footer a { color: #555 !important; }
             a { text-decoration: underline; }
@@ -2868,7 +2878,7 @@ run_wrap() {
             write_count=$(grep -c '"name":"Write"' "$logfile") || write_count=0
         fi
         for v in read_count search_count bash_count edit_count write_count bytes_read_est; do
-            eval "[ -z \"\$$v\" ] && $v=0"
+            [ -z "${!v}" ] && declare "$v=0"
         done
     fi
 
@@ -3165,6 +3175,8 @@ run_clean() {
             [ -d ".ai-memory/scripts" ] && rm -rf ".ai-memory/scripts"
             [ -f ".ai-memory/.watch.log" ] && rm ".ai-memory/.watch.log"
             [ -f ".ai-memory/temp_search_matches.txt" ] && rm ".ai-memory/temp_search_matches.txt"
+            [ -f ".ai-memory/token-memory-graph.json" ] && rm ".ai-memory/token-memory-graph.json"
+            [ -f ".ai-memory/symbol-map.txt" ] && rm ".ai-memory/symbol-map.txt"
             
             if [ -d ".ai-memory" ] && [ -z "$(ls -A .ai-memory)" ]; then
                 rmdir ".ai-memory"
