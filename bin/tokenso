@@ -681,6 +681,11 @@ run_save() {
     
     save_stats "$next_sessions" "$next_saved" "$saved_tokens"
 
+    # Update token memory graph
+    local pct=0
+    [ $raw_tokens -gt 0 ] && pct=$(( saved_tokens * 100 / raw_tokens ))
+    _save_token_memory_graph "$raw_tokens" "$map_tokens" "$saved_tokens" "$pct"
+
     # Append milestone note
     if [ -z "$message" ] && [ "$silent" = false ] && [ -t 0 ]; then
         echo ""
