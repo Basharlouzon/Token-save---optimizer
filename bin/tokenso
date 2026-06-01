@@ -3341,15 +3341,28 @@ _save_token_memory_graph() {
     local graph_file=".ai-memory/token-memory-graph.json"
     load_or_init_stats
 
+    # ── Milestone collection ──
     local milestones_json="[]"
+    local total_milestones=0
+    local recent_milestones_json="[]"
+    local has_low_signal=false
     if [ -f ".ai-memory/state.md" ]; then
         local ms_arr=()
         while IFS= read -r line || [ -n "$line" ]; do
             if [[ "$line" =~ ^\![[:space:]]*(.*) ]]; then
-                local ms=$(echo "${BASH_REMATCH[1]}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+                local ms=$(_js_escape "${BASH_REMATCH[1]}")
                 ms_arr+=("\"$ms\"")
             fi
         done < ".ai-memory/state.md"
+        total_milestones=${#ms_arr[@]}
+
+        # Low-signal detection
+        local rot_pat='^!(test|tes|tmp|temp|foo|bar|baz|xxx|debug|todo|asdf|qwer)$'
+        while IFS= read -r line || [ -n "$line" ]; do
+            local stripped=$(echo "$line" | sed 's/^![[:space:]]*//' | tr '[:upper:]' '[:lower:]')
+            [[ "$stripped" =~ ^(test|tes|tmp|temp|foo|bar|baz|xxx|debug|todo|asdf|qwer)$ ]] && has_low_signal=true && break
+        done < ".ai-memory/state.md"
+
         if [ ${#ms_arr[@]} -gt 0 ]; then
             local joined=""
             for ((i=0; i<${#ms_arr[@]}; i++)); do
@@ -3357,9 +3370,20 @@ _save_token_memory_graph() {
                 [ $i -lt $(( ${#ms_arr[@]} - 1 )) ] && joined="${joined}, "
             done
             milestones_json="[$joined]"
+
+            # Recent milestones (last 5)
+            local start=$(( ${#ms_arr[@]} - 5 ))
+            [ $start -lt 0 ] && start=0
+            local recent=""
+            for ((i=$start; i<${#ms_arr[@]}; i++)); do
+                recent="${recent}${ms_arr[$i]}"
+                [ $i -lt $(( ${#ms_arr[@]} - 1 )) ] && recent="${recent}, "
+            done
+            recent_milestones_json="[${recent}]"
         fi
     fi
 
+    # ── History analysis (trend detection) ──
     local hist_json="["
     for ((i=0; i<${#HISTORY_ARR[@]}; i++)); do
         hist_json="${hist_json}${HISTORY_ARR[$i]}"
@@ -3367,22 +3391,118 @@ _save_token_memory_graph() {
     done
     hist_json="${hist_json}]"
 
+    local trend="stable"
+    local avg_per_session=0
+    local peak_session=0
+    local min_session=0
+    local last_session=0
+    local efficiency_pct=0
+
+    if [ ${#HISTORY_ARR[@]} -gt 0 ]; then
+        # Compute stats
+        local hist_total=0
+        peak_session=${HISTORY_ARR[0]}
+        min_session=${HISTORY_ARR[0]}
+        for v in "${HISTORY_ARR[@]}"; do
+            hist_total=$(( hist_total + v ))
+            [ "$v" -gt "$peak_session" ] && peak_session=$v
+            [ "$v" -lt "$min_session" ] && min_session=$v
+        done
+        avg_per_session=$(( hist_total / ${#HISTORY_ARR[@]} ))
+        last_session=${HISTORY_ARR[$(( ${#HISTORY_ARR[@]} - 1 ))]}
+
+        # Efficiency: avg saved vs raw tokens
+        [ "$raw" -gt 0 ] && efficiency_pct=$(( avg_per_session * 100 / raw ))
+
+        # Trend: compare last 3 avg vs first 3 avg
+        if [ ${#HISTORY_ARR[@]} -ge 6 ]; then
+            local first3=0 last3=0
+            for ((i=0; i<3; i++)); do first3=$(( first3 + HISTORY_ARR[$i] )); done
+            local len=${#HISTORY_ARR[@]}
+            for ((i=len-3; i<len; i++)); do last3=$(( last3 + HISTORY_ARR[$i] )); done
+            local first_avg=$(( first3 / 3 ))
+            local last_avg=$(( last3 / 3 ))
+            if [ "$first_avg" -gt 0 ]; then
+                local change=$(( (last_avg - first_avg) * 100 / first_avg ))
+                if [ "$change" -gt 10 ]; then trend="improving"
+                elif [ "$change" -lt -10 ]; then trend="declining"
+                fi
+            fi
+        elif [ ${#HISTORY_ARR[@]} -ge 2 ]; then
+            # Simple: last vs first
+            if [ "${HISTORY_ARR[$(( ${#HISTORY_ARR[@]} - 1 ))]}" -gt "${HISTORY_ARR[0]}" ]; then
+                trend="improving"
+            elif [ "${HISTORY_ARR[$(( ${#HISTORY_ARR[@]} - 1 ))]}" -lt "${HISTORY_ARR[0]}" ]; then
+                trend="declining"
+            fi
+        fi
+    fi
+
+    # ── Observed metrics from wrap sessions ──
+    local obs_sessions=0 obs_reads=0 obs_searches=0 obs_bash=0 obs_edits=0 obs_bytes=0
+    if [ -d ".ai-memory/sessions" ]; then
+        obs_sessions=$(find .ai-memory/sessions -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$obs_sessions" -gt 0 ] && command -v jq >/dev/null 2>&1; then
+            obs_reads=$(jq -s '[.[].observed.tool_calls.read // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            obs_searches=$(jq -s '[.[].observed.tool_calls.search // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            obs_bash=$(jq -s '[.[].observed.tool_calls.bash // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            obs_edits=$(jq -s '[.[].observed.tool_calls.edit // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+            obs_bytes=$(jq -s '[.[].observed.bytes_read_est // 0] | add // 0' .ai-memory/sessions/*.json 2>/dev/null)
+        fi
+        for v in obs_reads obs_searches obs_bash obs_edits obs_bytes; do
+            if [ -z "${!v}" ] || [ "${!v}" = "null" ]; then
+                declare "$v=0"
+            fi
+        done
+    fi
+    local avg_reads_per=0 avg_edits_per=0
+    [ "$obs_sessions" -gt 0 ] && avg_reads_per=$(( obs_reads / obs_sessions ))
+    [ "$obs_sessions" -gt 0 ] && avg_edits_per=$(( obs_edits / obs_sessions ))
+
     local graph_files_count=0
     local graph_file_list
     graph_file_list=$(list_source_files)
     [ -n "$graph_file_list" ] && graph_files_count=$(echo "$graph_file_list" | wc -l | tr -d ' ')
 
+    local low_signal_str="false"
+    $has_low_signal && low_signal_str="true"
+
     cat > "$graph_file" << GRAPH_EOF
 {
-  "schema": 1,
+  "schema": 2,
   "version": "$VERSION",
   "generated": "$(date +"%Y-%m-%d %H:%M")",
   "project": "$(basename "$(pwd)")",
   "nodes": {
     "workspace_code": { "raw_tokens": $raw, "files": $graph_files_count },
     "semantic_map": { "map_tokens": $map, "compression_pct": $pct },
-    "token_memory": { "sessions": $SESSIONS, "cumulative_saved": $CUMULATIVE_SAVED, "history": $hist_json },
+    "token_memory": {
+      "sessions": $SESSIONS,
+      "cumulative_saved": $CUMULATIVE_SAVED,
+      "history": $hist_json,
+      "trend": "$trend",
+      "avg_per_session": $avg_per_session,
+      "peak_session": $peak_session,
+      "min_session": $min_session,
+      "last_session": $last_session,
+      "efficiency_pct": $efficiency_pct
+    },
+    "observed_metrics": {
+      "total_wrap_sessions": $obs_sessions,
+      "total_reads": $obs_reads,
+      "total_searches": $obs_searches,
+      "total_bash": $obs_bash,
+      "total_edits": $obs_edits,
+      "total_bytes_read": $obs_bytes,
+      "avg_reads_per_session": $avg_reads_per,
+      "avg_edits_per_session": $avg_edits_per
+    },
     "memory_state": { "milestones": $milestones_json },
+    "milestone_analysis": {
+      "total_milestones": $total_milestones,
+      "recent_milestones": $recent_milestones_json,
+      "has_low_signal": $low_signal_str
+    },
     "context_rules": { "active_agents": "$(detect_tools)" },
     "tokenso_core": { "version": "$VERSION" }
   },
@@ -3392,7 +3512,10 @@ _save_token_memory_graph() {
     { "from": "context_rules", "to": "memory_state", "data": "rules→state tracking" },
     { "from": "semantic_map", "to": "tokenso_core", "data": "map→optimization" },
     { "from": "memory_state", "to": "tokenso_core", "data": "state→engine" },
-    { "from": "token_memory", "to": "semantic_map", "data": "history→compression trend" }
+    { "from": "token_memory", "to": "semantic_map", "data": "history→compression trend" },
+    { "from": "observed_metrics", "to": "token_memory", "data": "observed→estimated correlation" },
+    { "from": "milestone_analysis", "to": "memory_state", "data": "quality→state health" },
+    { "from": "tokenso_core", "to": "observed_metrics", "data": "engine→real metrics" }
   ]
 }
 GRAPH_EOF
