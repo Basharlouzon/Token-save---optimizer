@@ -6,6 +6,14 @@
 ├── bin
 │   └── tokenso
 ├── docs
+│   ├── adr
+│   │   ├── 0001-adopt-adr-process.md
+│   │   ├── 0002-dashboard-export-and-polish.md
+│   │   ├── 0003-atomic-self-update.md
+│   │   ├── 0004-symbol-map.md
+│   │   ├── 0005-honest-telemetry.md
+│   │   ├── 0006-smart-linter.md
+│   │   └── 0007-command-polish.md
 │   └── superpowers
 │       ├── plans
 │       │   └── 2026-05-26-two-tier-command-groups.md
@@ -14,9 +22,10 @@
 ├── install.sh
 ├── scripts
 │   ├── apply-cross-rules.sh
+│   ├── build-symbol-map.sh
 │   └── init-smart-search.sh
 ├── tests
 │   └── test_ux.sh
 └── tokenso-dashboard.html
 
-8 directories, 12 files
+9 directories, 20 files

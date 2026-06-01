@@ -1,2 +1,25 @@
+tk w# Runtime / generated
 .ai-memory/
 tokenso-dashboard.html
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor / IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Temporary files
+*.tmp
+*.bak
+*.log

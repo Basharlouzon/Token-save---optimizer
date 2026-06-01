@@ -1,9 +1,11 @@
-
 # ==========================================
-# TOKENSO CONTEXT OPTIMIZER RULES
+# TOKENSO CONTEXT OPTIMIZER RULES (v3)
 # ==========================================
-- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search to find filenames before reading. Only read specific line ranges required.
-- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `bash .ai-memory/scripts/init-smart-search.sh .` and read `.ai-memory/repo-map.txt`.
+- **Smart Mode**: At the start of every session, run `tokenso smart` to auto-initialize, refresh stale maps, save stats, and get a structured report. Use `tokenso smart --json` for machine-readable output.
+- **Observable Sessions**: When the user invokes an agent from a CLI (claude, kilo, gemini, codex, aider, etc.) wrap it with `tokenso wrap` to record real session metrics. For Claude in particular, pass `--output-format stream-json` for exact Read/Search/Bash/Edit counts.
+- **Symbol Lookup First**: To locate a function/class/type, ALWAYS check `.ai-memory/symbol-map.txt` (or run `tokenso symbols <name>`) BEFORE opening files. Each entry is `path:line<TAB>kind<TAB>name` — jump straight to the line, do not read the whole file.
+- **Search Diet**: Do not read full files blindly. Check file size first. Use lightweight search (`tokenso search`, `tokenso symbols`) to find filenames/symbols before reading. Only read specific line ranges required.
+- **Smart Init**: If you need to explore the project, do not run `ls -R`. Instead, run `tokenso map` (or `bash .ai-memory/scripts/init-smart-search.sh .`) and read `.ai-memory/repo-map.txt` + `.ai-memory/symbol-map.txt`.
 - **Memory Protocol**: Before acting, always read `.ai-memory/state.md`. Upon reaching a milestone or repeating actions, compress your current understanding into `.ai-memory/state.md` and explicitly command yourself to forget the prior raw context to save tokens.
 - **Stop Duplication**: If you find yourself in a loop or re-reading the same files, STOP. Update the memory state and ask the user for clarification.
 
@@ -12,8 +14,8 @@
 # ==========================================
 - **Default branch**: `master` on `origin` (https://github.com/Basharlouzon/Token-save---optimizer).
 - **Release Trigger**: Whenever the user asks to *update*, *fix*, *enhance*, or *improve* the project, after the change is complete you MUST:
-  1. Bump `VERSION` in `bin/tokenso:14` (patch for fixes, minor for enhancements/new features, major for breaking changes) — follow the `release-manager` skill.
-  2. Update the version badge on `README.md:3` and add a short "What's new" entry.
+  1. Bump `VERSION` in `bin/tokenso` (patch for fixes, minor for enhancements/new features, major for breaking changes).
+  2. Update the version badge on `README.md` and add a short "What's new" entry.
   3. Commit with a Conventional Commits message (`feat:` / `fix:` / `refactor:` / `docs:` …).
   4. `git push origin master` — and tag + `gh release create` if it's a user-visible release.
 - **Confirmation**: Before pushing destructive or non-fix commits to master, summarize the diff in one line and proceed. If the change is risky (schema break, marker bump, install-script edit), pause for explicit user OK.

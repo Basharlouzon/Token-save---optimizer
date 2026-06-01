@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.0.0"
+VERSION="3.1.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
