@@ -1,4 +1,4 @@
-#!/bin/bash
+tk#!/bin/bash
 # tokenso CLI — Enhanced Edition
 # https://github.com/Basharlouzon/Token-save---optimizer
 
@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.1.0"
+VERSION="3.2.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
