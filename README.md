@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.4.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.5.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,23 +26,23 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.4.0
+## 🆕 What's New in 3.5.0
 
-> **Real Tokenizer + Enhanced Memory Graph** — accurate tiktoken counting, cognitive architecture
+> **`tokenso graph` Command** — read and display the token memory graph from the CLI
 
 | Feature                       | Description                                                                                                                                     |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🧠 **Token Memory Detection** | `tokenso run` now detects and reads token memory from stats history — a new **[Token Memory]** node displays cumulative savings across sessions |
-| � **Sparkline Trends**        | Savings trend visualization with milestone recall from last 10 sessions                                                                         |
-| � **6-Phase Mindmap**         | Scan → Synapse → Token Memory Recall → Pulse → Compression → Save                                                                               |
-| � **Machine-Readable Graph**  | Saves `.ai-memory/token-memory-graph.json` with nodes and edges for AI agents                                                                   |
-| 🎯 **Cognitive Synapses**     | 6 synapse connections linking Workspace Code, Context Rules, Memory State, Semantic Map, Token Memory, and Tokenso Core                         |
+| 📊 **`tokenso graph`**         | New CLI command to read and display the token memory graph — cognitive nodes, token distribution, session deltas, synapse connections           |
+| 📊 **`tokenso graph --json`**  | Raw JSON output for AI agents and scripts                                                                                                       |
+| 🧠 **Real Token Detection**   | Integrates tiktoken (cl100k_base) for accurate token counting; falls back to words×13/10 heuristic                                              |
+| 🎯 **Token Distribution**     | Per-directory token breakdown, token density, session delta tracking                                                                            |
 
 <details>
 <summary><strong>📜 Release History</strong></summary>
 
 <br />
 
+**v3.4.0** — Real tokenizer + enhanced memory graph: tiktoken integration, 10 cognitive nodes, token distribution
 **v3.3.0** — Enhanced memory graph: token distribution, session delta, token density, 10 cognitive nodes
 **v3.2.0** — `tokenso brief` — auto-generate architecture briefing for AI agents
 **v3.1.0** — Memory graph token detection: read token memory across sessions, sparkline trends
@@ -205,7 +205,7 @@ Launches a **6-phase cognitive mindmap** that scans your workspace, discovers re
      ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║██║   ██║
      ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║╚██████╔╝
      ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝ ╚═════╝
-          Cognitive Mindmap Search  v3.4.0
+           Cognitive Mindmap Search  v3.5.0
 
   🔍 Phase 1: Scanning project workspace...
   ◉  Discovered [Workspace Code] ... 47 source files
@@ -330,6 +330,7 @@ The state file (`.ai-memory/state.md`) tracks completed tasks, next actions, blo
 | `tk stats --html` | Premium HTML dashboard                    |
 | `tk run`          | Cognitive mindmap with token memory graph |
 | `tk map`          | Colorized repository structure tree       |
+| `tk graph`        | Read token memory graph (use --json for raw) |
 | `tk smart`        | AI agent autopilot                        |
 
 ### Management (`tk config <subcommand>`)
