@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.3.0"
+VERSION="3.4.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -69,6 +69,66 @@ _pad_decimal() {
 
 cost_usd()      { _pad_decimal "$(_cost_compute "$1" "$COST_PER_1M")"; }
 cost_usd_rate() { _pad_decimal "$(_cost_compute "$1" "$2")"; }
+
+# ─── Real Tokenizer Integration ───────────────────────────────────────────
+# Detects tiktoken (Python) for accurate token counting.
+# Falls back to the words * 13/10 heuristic when unavailable.
+# Caches tokenizer type for the session.
+
+_TOKENIZER_CACHE=""
+_TOKENIZER_TYPE=""  # "tiktoken", " heuristic"
+
+_detect_tokenizer() {
+    [ -n "$_TOKENIZER_TYPE" ] && return 0
+    if command -v python3 &>/dev/null; then
+        if python3 -c "import tiktoken; enc=tiktoken.get_encoding('cl100k_base'); print(len(enc.encode('test')))" &>/dev/null; then
+            _TOKENIZER_TYPE="tiktoken"
+            return 0
+        fi
+    fi
+    _TOKENIZER_TYPE="heuristic"
+}
+
+# Convert word count to token count. Uses tiktoken when available,
+# otherwise applies the 13/10 ratio heuristic.
+_words_to_tokens() {
+    local words=$1
+    [ -z "$words" ] && words=0
+    _detect_tokenizer
+
+    if [ "$_TOKENIZER_TYPE" = "tiktoken" ] && [ -f "$2" ] && [ -s "$2" ]; then
+        # Use tiktoken for accurate counting on actual file content
+        local count
+        count=$(python3 -c "
+import tiktoken, sys
+enc = tiktoken.get_encoding('cl100k_base')
+with open(sys.argv[1], 'r', errors='ignore') as f:
+    print(len(enc.encode(f.read())))
+" "$2" 2>/dev/null) || count=$(( words * 13 / 10 ))
+        echo "$count"
+    else
+        echo $(( words * 13 / 10 ))
+    fi
+}
+
+# Count tokens for a string (not a file). Uses tiktoken when available.
+_str_to_tokens() {
+    local text="$1"
+    _detect_tokenizer
+
+    if [ "$_TOKENIZER_TYPE" = "tiktoken" ] && [ -n "$text" ]; then
+        local count
+        count=$(printf '%s' "$text" | python3 -c "
+import tiktoken, sys
+enc = tiktoken.get_encoding('cl100k_base')
+print(len(enc.encode(sys.stdin.read())))
+" 2>/dev/null) || count=$(( $(echo "$text" | wc -w | tr -d ' ') * 13 / 10 ))
+        echo "$count"
+    else
+        local words=$(echo "$text" | wc -w | tr -d ' ')
+        echo $(( words * 13 / 10 ))
+    fi
+}
 
 # Escape a string for safe embedding inside a <script> JSON literal.
 # Prevents XSS via </script>, backslashes, and double-quotes.
@@ -313,8 +373,8 @@ show_dashboard() {
     MAP_WORDS=0
     [ -f ".ai-memory/repo-map.txt" ] && MAP_WORDS=$(wc -w < ".ai-memory/repo-map.txt")
 
-    RAW_TOKENS=$(( RAW_WORDS * 13 / 10 ))
-    MAP_TOKENS=$(( MAP_WORDS * 13 / 10 ))
+    RAW_TOKENS=$(_words_to_tokens "$RAW_WORDS")
+    MAP_TOKENS=$(_words_to_tokens "$MAP_WORDS" ".ai-memory/repo-map.txt")
     SAVED_TOKENS=$(( RAW_TOKENS - MAP_TOKENS ))
     [ $SAVED_TOKENS -lt 0 ] && SAVED_TOKENS=0
 
@@ -4072,6 +4132,9 @@ run_doctor() {
         "$(command -v tree &>/dev/null && echo ok || echo warn)"
     _check "perl: $(command -v perl &>/dev/null && echo 'available' || echo 'missing (sed fallback active)')" \
         "$(command -v perl &>/dev/null && echo ok || echo warn)"
+    _detect_tokenizer
+    _check "tokenizer: ${_TOKENIZER_TYPE} $( [ "$_TOKENIZER_TYPE" = "tiktoken" ] && echo '(accurate cl100k_base)' || echo '(heuristic words×13/10)')" \
+        "$( [ "$_TOKENIZER_TYPE" = "tiktoken" ] && echo ok || echo warn)"
 
     echo ""
     echo -e "  ${BOLD}── Project State ────────────────────────────────────${NC}"
