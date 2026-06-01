@@ -135,26 +135,112 @@ print(len(enc.encode(sys.stdin.read())))
 _js_escape() { echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/</\\x3c/g; s/>/\\x3e/g'; }
 
 detect_tools() {
+    # Detect AI coding agents and editors from config files + running processes
     local found=()
-    [ -f ".claudecode" ]                          && found+=("Claude Code")
-    [ -f "CLAUDE.md" ]                            && found+=("Claude Code (CLAUDE.md)")
-    [ -f ".clinerules" ]                          && found+=("Cline")
-    [ -f ".roomodes" ]                            && found+=("Roo Code")
-    [ -f ".kilorules" ]                           && found+=("Kilo")
-    [ -f ".geminirules" ]                         && found+=("Gemini CLI / Antigravity")
-    [ -f ".opencode" ]                            && found+=("Open Code")
-    [ -f ".cursorrules" ]                         && found+=("Cursor")
-    [ -d ".cursor/rules" ]                        && found+=("Cursor (rules/)")
-    [ -f ".windsurfrules" ]                       && found+=("Windsurf")
-    [ -f ".github/copilot-instructions.md" ]      && found+=("GitHub Copilot")
-    [ -f ".aider.conf.yml" ] || [ -f "CONVENTIONS.md" ] && found+=("Aider")
-    [ -f ".continue/config.yaml" ] || [ -f ".continue/config.json" ] && found+=("Continue.dev")
-    [ -f ".amazonq/rules/token-optimizer.md" ]    && found+=("Amazon Q")
-    [ -f ".voidrules" ]                           && found+=("Void Editor")
-    [ -f ".zed/assistant-rules.md" ]              && found+=("Zed")
-    [ -f ".pearai" ]                              && found+=("PearAI")
-    [ -d "$HOME/.gemini/antigravity/skills/context-optimizer" ] && found+=("Antigravity ✓ global")
-    echo "${found[@]}"
+    local detected_details=""
+
+    # ── Config-file detection ──
+    [ -f ".claudecode" ]                          && found+=("Claude Code")       && detected_details+="Claude Code:config; "
+    [ -f "CLAUDE.md" ]                            && found+=("Claude Code (CLAUDE.md)") && detected_details+="Claude Code (CLAUDE.md):config; "
+    [ -f ".clinerules" ]                          && found+=("Cline")             && detected_details+="Cline:config; "
+    [ -f ".roomodes" ]                            && found+=("Roo Code")          && detected_details+="Roo Code:config; "
+    [ -f ".kilorules" ]                           && found+=("Kilo")              && detected_details+="Kilo:config; "
+    [ -f ".geminirules" ]                         && found+=("Gemini CLI / Antigravity") && detected_details+="Gemini CLI:config; "
+    [ -f ".opencode" ]                            && found+=("Open Code")         && detected_details+="Open Code:config; "
+    [ -f ".cursorrules" ]                         && found+=("Cursor")            && detected_details+="Cursor:config; "
+    [ -d ".cursor/rules" ]                        && found+=("Cursor (rules/)")   && detected_details+="Cursor (rules/):config; "
+    [ -f ".windsurfrules" ]                       && found+=("Windsurf")          && detected_details+="Windsurf:config; "
+    [ -f ".github/copilot-instructions.md" ]      && found+=("GitHub Copilot")    && detected_details+="GitHub Copilot:config; "
+    [ -f ".aider.conf.yml" ] || [ -f "CONVENTIONS.md" ] && found+=("Aider")       && detected_details+="Aider:config; "
+    [ -f ".continue/config.yaml" ] || [ -f ".continue/config.json" ] && found+=("Continue.dev") && detected_details+="Continue.dev:config; "
+    [ -f ".amazonq/rules/token-optimizer.md" ]    && found+=("Amazon Q")          && detected_details+="Amazon Q:config; "
+    [ -f ".voidrules" ]                           && found+=("Void Editor")       && detected_details+="Void Editor:config; "
+    [ -f ".zed/assistant-rules.md" ]              && found+=("Zed")               && detected_details+="Zed:config; "
+    [ -f ".pearai" ]                              && found+=("PearAI")            && detected_details+="PearAI:config; "
+    [ -d "$HOME/.gemini/antigravity/skills/context-optimizer" ] && found+=("Antigravity ✓ global") && detected_details+="Antigravity:global; "
+
+    # ── Running process detection ──
+    # VS Code
+    if pgrep -f "Visual Studio Code\|Code Helper\|electron.*code" &>/dev/null; then
+        local has_vscode=false
+        for t in "${found[@]}"; do [[ "$t" == *"Visual Studio Code"* ]] && has_vscode=true && break; done
+        if ! $has_vscode; then
+            found+=("Visual Studio Code")
+            detected_details+="Visual Studio Code:process; "
+        else
+            detected_details="${detected_details/Visual Studio Code:config/Visual Studio Code:config+process}"
+        fi
+    fi
+    # VS Code workspace detection
+    if [ -d ".vscode" ]; then
+        local has_vscode=false
+        for t in "${found[@]}"; do [[ "$t" == *"Visual Studio Code"* ]] && has_vscode=true && break; done
+        if ! $has_vscode; then
+            found+=("Visual Studio Code (.vscode/)")
+            detected_details+="Visual Studio Code:workspace; "
+        fi
+    fi
+
+    # Cline plugin (running as VS Code extension)
+    if pgrep -f "cline\|saoud.*rizwan.*cline" &>/dev/null || \
+       [ -d "$HOME/.vscode/extensions" ] && ls "$HOME/.vscode/extensions/" 2>/dev/null | grep -qi "cline"; then
+        local has_cline=false
+        for t in "${found[@]}"; do [[ "$t" == *"Cline"* ]] && has_cline=true && break; done
+        if $has_cline; then
+            detected_details="${detected_details/Cline:config/Cline:config+extension}"
+        else
+            found+=("Cline (extension)")
+            detected_details+="Cline:extension; "
+        fi
+    fi
+
+    # Cursor editor (running)
+    if pgrep -f "Cursor\|cursor.*electron" &>/dev/null; then
+        local has_cursor=false
+        for t in "${found[@]}"; do [[ "$t" == *"Cursor"* ]] && has_cursor=true && break; done
+        if $has_cursor; then
+            detected_details="${detected_details/Cursor:config/Cursor:config+process}"
+        else
+            found+=("Cursor (running)")
+            detected_details+="Cursor:process; "
+        fi
+    fi
+
+    # Windsurf editor (running)
+    if pgrep -f "Windsurf\|windsurf.*electron" &>/dev/null; then
+        local has_windsurf=false
+        for t in "${found[@]}"; do [[ "$t" == *"Windsurf"* ]] && has_windsurf=true && break; done
+        if $has_windsurf; then
+            detected_details="${detected_details/Windsurf:config/Windsurf:config+process}"
+        else
+            found+=("Windsurf (running)")
+            detected_details+="Windsurf:process; "
+        fi
+    fi
+
+    # Claude Code CLI (running)
+    if pgrep -f "claude.*code\|claude-code" &>/dev/null; then
+        local has_claude=false
+        for t in "${found[@]}"; do [[ "$t" == *"Claude Code"* ]] && has_claude=true && break; done
+        if $has_claude; then
+            detected_details="${detected_details/Claude Code:config/Claude Code:config+process}"
+        fi
+    fi
+
+    # ── Output ──
+    if [ "$1" = "--details" ]; then
+        echo "$detected_details"
+    elif [ "$1" = "--json" ]; then
+        local json_arr=""
+        for t in "${found[@]}"; do
+            local escaped=$(echo "$t" | sed 's/"/\\"/g')
+            json_arr+="\"${escaped}\", "
+        done
+        json_arr="${json_arr%, }"
+        echo "[$json_arr]"
+    else
+        echo "${found[@]}"
+    fi
 }
 
 # Single source of truth for exclusions. Both `rg` and `find` branches filter
@@ -347,6 +433,39 @@ run_graph() {
         [ "$delta_tokens" -lt 0 ] && delta_color="$RED"
         echo -e "  ${CYAN}📈 Session Delta${NC}"
         echo -e "     Change: ${delta_color}$(fmt_num ${delta_tokens})${NC} tokens (${delta_pct}%)"
+        echo ""
+    fi
+
+    # ── Detected Tools ──
+    local tools_list
+    tools_list=$(jq -r '.nodes.context_rules.active_agents // ""' "$graph_file" 2>/dev/null)
+    if [ -n "$tools_list" ]; then
+        echo -e "  ${BOLD}── DETECTED AI TOOLS ───────────────────────────────${NC}"
+        # Also run live detection to show current state
+        local live_tools=$(detect_tools)
+        local live_details=$(detect_tools --details)
+        if [ -n "$live_tools" ]; then
+            # Parse details and show each tool with detection method
+            echo "$live_details" | tr ';' '\n' | while IFS= read -r entry; do
+                [ -z "$entry" ] && continue
+                local tool_name=$(echo "$entry" | cut -d: -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                local method=$(echo "$entry" | cut -d: -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                local icon="🔧"
+                local method_label="$method"
+                case "$method" in
+                    config+process)  method_label="config ✓ + running ✓" ; icon="🟢" ;;
+                    config+extension)method_label="config ✓ + extension ✓" ; icon="🟢" ;;
+                    config)          method_label="config detected" ; icon="🔵" ;;
+                    process)         method_label="process running" ; icon="🟡" ;;
+                    extension)       method_label="extension installed" ; icon="🟡" ;;
+                    workspace)       method_label="workspace detected" ; icon="🔵" ;;
+                    global)          method_label="global install" ; icon="🟣" ;;
+                esac
+                echo -e "     ${icon} ${CYAN}${tool_name}${NC}  ${DIM}(${method_label})${NC}"
+            done
+        else
+            echo -e "     ${DIM}No tools currently active${NC}"
+        fi
         echo ""
     fi
 
