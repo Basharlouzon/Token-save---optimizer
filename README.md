@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.5.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.6.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,16 +26,18 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.5.0
+## 🆕 What's New in 3.6.0
 
-> **`tokenso graph` Command** — read and display the token memory graph from the CLI
+> **Enhanced AI Tool Detection** — detect Cline, VS Code, Cursor by process + extension + config
 
 | Feature                       | Description                                                                                                                                     |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊 **`tokenso graph`**         | New CLI command to read and display the token memory graph — cognitive nodes, token distribution, session deltas, synapse connections           |
-| 📊 **`tokenso graph --json`**  | Raw JSON output for AI agents and scripts                                                                                                       |
+| 🤖 **3-Layer Detection**      | Config files + running processes + VS Code extension scanning for 16+ AI tools                                                                  |
+| 🟢 **Live Status Icons**      | `tokenso graph` shows 🟢 running, 🔵 config, 🟡 extension, 🟣 global for each tool                                                            |
+| 📊 **Cline Detection**        | Detects Cline via `.clinerules` config + VS Code extension directory scan                                                                       |
+| 🖥️ **VS Code Detection**      | Detects Visual Studio Code via running process + `.vscode/` workspace directory                                                                 |
+| 📊 **`tokenso graph`**        | CLI command to read and display the token memory graph with cognitive nodes, token distribution, session deltas, synapse connections            |
 | 🧠 **Real Token Detection**   | Integrates tiktoken (cl100k_base) for accurate token counting; falls back to words×13/10 heuristic                                              |
-| 🎯 **Token Distribution**     | Per-directory token breakdown, token density, session delta tracking                                                                            |
 
 <details>
 <summary><strong>📜 Release History</strong></summary>
