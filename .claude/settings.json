@@ -15,6 +15,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "tokenso hook gate"
+          }
+        ],
+        "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "tokenso hook guard-read"
           }
         ],
@@ -27,6 +36,16 @@
           {
             "type": "command",
             "command": "tokenso hook precompact"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tokenso hook gate"
           }
         ]
       }

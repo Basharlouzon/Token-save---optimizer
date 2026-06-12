@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.7.0"
+VERSION="3.8.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -776,6 +776,8 @@ _show_commands() {
     echo -e "  ${CYAN}graph${NC}     Read token memory graph (use --json for raw)"
     echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
     echo -e "  ${CYAN}claude${NC}    Native Claude Code hooks + statusline (install/status/uninstall)"
+    echo -e "  ${CYAN}pause${NC}     Hard-block all Claude Code usage in this project (protect plan quota)"
+    echo -e "  ${CYAN}resume${NC}    Lift the pause — Claude Code can work again"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -5657,10 +5659,24 @@ except Exception:
     fi
 }
 
+PAUSE_FLAG=".ai-memory/paused"
+
 # Hook entry points invoked by Claude Code (configured via `tokenso claude install`).
 run_hook() {
     local event="${1:-}"
     case "$event" in
+        gate)
+            # UserPromptSubmit + catch-all PreToolUse: hard-block while paused (ADR-0009).
+            # Exit 2 blocks the prompt/tool call; nothing reaches the model from a blocked prompt.
+            cat >/dev/null 2>&1
+            [ -f "$PAUSE_FLAG" ] || return 0
+            {
+                echo "⏸ Tokenso PAUSE is active — Claude Code usage is blocked in this project to protect plan usage."
+                [ -s "$PAUSE_FLAG" ] && sed 's/^/   /' "$PAUSE_FLAG"
+                echo "Stop working and do not retry. The user must run: tokenso resume"
+            } >&2
+            exit 2
+            ;;
         session-start)
             # stdout from a SessionStart hook is injected into Claude's context.
             local state=".ai-memory/state.md" sym=".ai-memory/symbol-map.txt" map=".ai-memory/repo-map.txt"
@@ -5721,6 +5737,10 @@ run_statusline() {
     local payload=""
     [ -t 0 ] || payload=$(cat 2>/dev/null)
     local stats=".ai-memory/optimizer-stats.json"
+    if [ -f "$PAUSE_FLAG" ]; then
+        echo "⏸ tokenso PAUSED — usage blocked, run \`tokenso resume\` to work again"
+        return 0
+    fi
     if [ ! -f "$stats" ]; then
         echo "🧠 tokenso: not initialized — run \`tokenso install\`"
         return 0
@@ -5743,6 +5763,30 @@ run_statusline() {
     echo "$line"
 }
 
+# Pause switch (ADR-0009): hard-block all Claude Code usage until resumed.
+run_pause() {
+    mkdir -p .ai-memory
+    {
+        echo "Paused: $(date +"%Y-%m-%d %H:%M")"
+        [ $# -gt 0 ] && echo "Reason: $*"
+    } > "$PAUSE_FLAG"
+    echo -e "${YELLOW}⏸ Tokenso PAUSE active${NC} — all Claude Code prompts and tool calls in this project are blocked."
+    [ $# -gt 0 ] && echo -e "   ${DIM}Reason: $*${NC}"
+    if ! grep -q 'tokenso hook gate' .claude/settings.json 2>/dev/null; then
+        echo -e "   ${YELLOW}⚠  Gate hooks not installed — the pause cannot be enforced. Run: ${CYAN}tokenso claude install${NC}"
+    fi
+    echo -e "   ${DIM}Turn it back on with: ${CYAN}tokenso resume${NC}"
+}
+
+run_resume() {
+    if [ ! -f "$PAUSE_FLAG" ]; then
+        echo -e "${GREEN}▶ Tokenso is not paused — nothing to resume.${NC}"
+        return 0
+    fi
+    rm -f "$PAUSE_FLAG"
+    echo -e "${GREEN}▶ Tokenso resumed${NC} — Claude Code can work in this project again."
+}
+
 # Merge/remove tokenso-owned hooks in a Claude Code settings file.
 _claude_hooks_write() {
     local mode="$1" target="$2"
@@ -5755,7 +5799,11 @@ _claude_hooks_write() {
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "tokenso hook session-start" }] }
     ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "tokenso hook gate" }] }
+    ],
     "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "tokenso hook gate" }] },
       { "matcher": "Read", "hooks": [{ "type": "command", "command": "tokenso hook guard-read" }] }
     ],
     "PreCompact": [
@@ -5788,17 +5836,19 @@ def owned(entry):
 
 hooks = data.setdefault("hooks", {})
 spec = {
-    "SessionStart": (None, "tokenso hook session-start"),
-    "PreToolUse": ("Read", "tokenso hook guard-read"),
-    "PreCompact": (None, "tokenso hook precompact"),
+    "SessionStart": [(None, "tokenso hook session-start")],
+    "UserPromptSubmit": [(None, "tokenso hook gate")],
+    "PreToolUse": [("*", "tokenso hook gate"), ("Read", "tokenso hook guard-read")],
+    "PreCompact": [(None, "tokenso hook precompact")],
 }
-for event, (matcher, cmd) in spec.items():
+for event, wanted in spec.items():
     entries = [e for e in hooks.get(event, []) if not owned(e)]
     if mode == "install":
-        entry = {"hooks": [{"type": "command", "command": cmd}]}
-        if matcher:
-            entry["matcher"] = matcher
-        entries.append(entry)
+        for matcher, cmd in wanted:
+            entry = {"hooks": [{"type": "command", "command": cmd}]}
+            if matcher:
+                entry["matcher"] = matcher
+            entries.append(entry)
     if entries:
         hooks[event] = entries
     else:
@@ -5835,6 +5885,7 @@ run_claude() {
             echo -e "${GREEN}✅ Claude Code hooks installed in ${target}${NC}"
             echo -e "   ${DIM}SessionStart${NC}  injects memory state + map stats (~150 tokens, zero exploration)"
             echo -e "   ${DIM}PreToolUse${NC}    guards blind reads of files > \${TOKENSO_READ_GUARD_TOKENS:-2000} tokens"
+            echo -e "   ${DIM}Pause gate${NC}    \`tokenso pause\` hard-blocks all prompts/tools until \`tokenso resume\`"
             echo -e "   ${DIM}PreCompact${NC}    checkpoints .ai-memory/state.md before compaction"
             echo -e "   ${DIM}statusLine${NC}    live savings in the Claude Code status bar"
             echo -e "   ${DIM}Takes effect on the next Claude Code session. Remove with: tokenso claude uninstall${NC}"
@@ -5848,6 +5899,9 @@ run_claude() {
             echo -e "${GREEN}✅ Tokenso hooks removed from ${target}${NC} ${DIM}(other settings preserved)${NC}"
             ;;
         status)
+            if [ -f "$PAUSE_FLAG" ]; then
+                echo -e "${YELLOW}⏸ PAUSED — all Claude Code usage blocked. Resume with: ${CYAN}tokenso resume${NC}"
+            fi
             if [ -f "$target" ] && grep -q 'tokenso hook' "$target" 2>/dev/null; then
                 echo -e "${GREEN}✅ Tokenso hooks active in ${target}${NC}"
                 grep -o 'tokenso hook [a-z-]*\|tokenso statusline' "$target" | sort -u | sed 's/^/   • /'
@@ -5944,6 +5998,14 @@ case "$1" in
     statusline)
         shift
         run_statusline "$@"
+        ;;
+    pause)
+        shift
+        run_pause "$@"
+        ;;
+    resume)
+        shift
+        run_resume "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;

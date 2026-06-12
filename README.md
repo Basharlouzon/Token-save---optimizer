@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.7.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.8.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,9 +26,21 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.7.0
+## 🆕 What's New in 3.8.0
 
-> **Native Claude Code Integration** — Tokenso savings are now *enforced by the harness*, not just suggested in CLAUDE.md ([ADR-0008](docs/adr/0008-claude-code-hooks.md))
+> **Pause Switch** — `tokenso pause` hard-blocks ALL Claude Code usage in a project (zero token burn) until you run `tokenso resume` ([ADR-0009](docs/adr/0009-pause-switch.md))
+
+| Feature                  | Description                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------|
+| ⏸ **`tokenso pause`**    | Drops a flag that blocks every prompt and tool call via hooks — protects your plan quota; optional reason: `tokenso pause "saving quota"` |
+| ▶ **`tokenso resume`**   | One command lifts the block and Claude Code works again                                                                         |
+| 🚪 **Prompt-level gate** | `UserPromptSubmit` hook blocks *before* the model is invoked — paused sessions cost **zero** tokens                            |
+| 🧱 **Catch-all gate**    | `PreToolUse` matcher `*` stops in-flight sessions mid-turn too                                                                  |
+| 📟 **Visible state**     | Statusline shows `⏸ tokenso PAUSED`; `tokenso claude status` shows pause + active hooks                                        |
+
+### v3.7.0 — Native Claude Code Integration
+
+> Tokenso savings are *enforced by the harness*, not just suggested in CLAUDE.md ([ADR-0008](docs/adr/0008-claude-code-hooks.md))
 
 | Feature                        | Description                                                                                                                                    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
