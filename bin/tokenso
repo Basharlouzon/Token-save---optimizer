@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.8.0"
+VERSION="3.9.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -778,6 +778,7 @@ _show_commands() {
     echo -e "  ${CYAN}claude${NC}    Native Claude Code hooks + statusline (install/status/uninstall)"
     echo -e "  ${CYAN}pause${NC}     Hard-block all Claude Code usage in this project (protect plan quota)"
     echo -e "  ${CYAN}resume${NC}    Lift the pause — Claude Code can work again"
+    echo -e "  ${CYAN}budget${NC}    Cap estimated reads/session; auto-pause on cross (${DIM}tokenso budget 100k${NC})"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -5660,6 +5661,39 @@ except Exception:
 }
 
 PAUSE_FLAG=".ai-memory/paused"
+BUDGET_FILE=".ai-memory/budget.json"
+
+# Parse a human token count (100k / 1.5m / 100000) into an integer.
+_parse_tokens() {
+    local v; v=$(printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -d ' ,_')
+    case "$v" in
+        *k) awk -v n="${v%k}" 'BEGIN{printf "%d", n*1000}' ;;
+        *m) awk -v n="${v%m}" 'BEGIN{printf "%d", n*1000000}' ;;
+        *[!0-9]*) echo 0 ;;
+        *) echo "${v:-0}" ;;
+    esac
+}
+
+# Format an integer token count as 1.2M / 87k / 950.
+_fmt_tokens() {
+    local n=$1
+    if [ "$n" -ge 1000000 ]; then awk -v s="$n" 'BEGIN{printf "%.1fM", s/1000000}'
+    elif [ "$n" -ge 1000 ]; then awk -v s="$n" 'BEGIN{printf "%.0fk", s/1000}'
+    else echo "$n"; fi
+}
+
+# Read one numeric field from budget.json (cap|used). Echoes 0 if absent.
+_budget_get() {
+    [ -f "$BUDGET_FILE" ] || { echo 0; return; }
+    sed -n 's/.*"'"$1"'":[[:space:]]*\([0-9]*\).*/\1/p' "$BUDGET_FILE" | head -1 | grep -q . \
+        && sed -n 's/.*"'"$1"'":[[:space:]]*\([0-9]*\).*/\1/p' "$BUDGET_FILE" | head -1 || echo 0
+}
+
+# Write budget.json with given cap + used.
+_budget_write() {
+    mkdir -p .ai-memory
+    printf '{"cap": %s, "used": %s}\n' "${1:-0}" "${2:-0}" > "$BUDGET_FILE"
+}
 
 # Hook entry points invoked by Claude Code (configured via `tokenso claude install`).
 run_hook() {
@@ -5692,6 +5726,12 @@ run_hook() {
             fi
             [ -f "$map" ] && echo "- Repo map: read .ai-memory/repo-map.txt instead of ls -R / Glob sweeps."
             echo "- Large blind file reads are guarded; read specific line ranges instead."
+            # Reset per-session budget tally (cap persists).
+            local cap; cap=$(_budget_get cap)
+            if [ "$cap" -gt 0 ]; then
+                _budget_write "$cap" 0
+                echo "- Budget gate: $(_fmt_tokens "$cap")/session cap active; project auto-pauses when estimated reads exceed it."
+            fi
             ;;
         guard-read)
             # PreToolUse(Read): block whole-file reads of large files, point to symbol/range reads.
@@ -5709,6 +5749,22 @@ run_hook() {
             local bytes est threshold
             bytes=$(wc -c < "$fp" | tr -d ' ')
             est=$(( bytes / 4 ))
+            # Budget tally: count this read's estimate toward the per-session cap.
+            local cap used
+            cap=$(_budget_get cap)
+            if [ "$cap" -gt 0 ]; then
+                used=$(_budget_get used)
+                used=$(( used + est ))
+                _budget_write "$cap" "$used"
+                if [ "$used" -ge "$cap" ]; then
+                    { echo "Budget cap $(_fmt_tokens "$cap") reached"; echo "Estimated reads this session: $(_fmt_tokens "$used")."; } > "$PAUSE_FLAG"
+                    {
+                        echo "⏸ Tokenso BUDGET cap reached (~$(_fmt_tokens "$used") / $(_fmt_tokens "$cap") estimated reads this session)."
+                        echo "Project auto-paused to protect plan usage. Run: tokenso resume   (or raise it: tokenso budget <N>)"
+                    } >&2
+                    exit 2
+                fi
+            fi
             threshold="${TOKENSO_READ_GUARD_TOKENS:-2000}"
             [ "$est" -le "$threshold" ] && return 0
             {
@@ -5739,6 +5795,18 @@ run_statusline() {
     local stats=".ai-memory/optimizer-stats.json"
     if [ -f "$PAUSE_FLAG" ]; then
         echo "⏸ tokenso PAUSED — usage blocked, run \`tokenso resume\` to work again"
+        return 0
+    fi
+    local bcap; bcap=$(_budget_get cap)
+    if [ "$bcap" -gt 0 ]; then
+        local bused bpct icon
+        bused=$(_budget_get used)
+        bpct=$(( bused * 100 / bcap ))
+        if [ "$bpct" -ge 80 ]; then icon="⚠"; else icon="🧠"; fi
+        local bmodel; bmodel=$(_json_field "$payload" "model.display_name")
+        local bl="$icon tokenso ⏐ budget $(_fmt_tokens "$bused")/$(_fmt_tokens "$bcap") (${bpct}%)"
+        [ -n "$bmodel" ] && bl="$bl ⏐ $bmodel"
+        echo "$bl"
         return 0
     fi
     if [ ! -f "$stats" ]; then
@@ -5785,6 +5853,45 @@ run_resume() {
     fi
     rm -f "$PAUSE_FLAG"
     echo -e "${GREEN}▶ Tokenso resumed${NC} — Claude Code can work in this project again."
+}
+
+# Token budget gate (ADR-0010): cap estimated per-session reads, auto-pause on cross.
+run_budget() {
+    local arg="${1:-}"
+    case "$arg" in
+        "")
+            local cap; cap=$(_budget_get cap)
+            if [ "$cap" -le 0 ]; then
+                echo -e "${DIM}No budget set.${NC} Cap this project's per-session reads with: ${CYAN}tokenso budget 100k${NC}"
+                return 0
+            fi
+            local used pct remain; used=$(_budget_get used)
+            pct=$(( used * 100 / cap )); remain=$(( cap - used )); [ "$remain" -lt 0 ] && remain=0
+            echo -e "${BOLD}Budget:${NC} ~$(_fmt_tokens "$used") / $(_fmt_tokens "$cap") used (${pct}%), $(_fmt_tokens "$remain") remaining this session"
+            [ "$pct" -ge 80 ] && echo -e "   ${YELLOW}⚠  Over 80% — project will auto-pause at 100%.${NC}"
+            echo -e "   ${DIM}Estimate from guarded reads only; resets each Claude Code session. Clear with: ${CYAN}tokenso budget off${NC}"
+            ;;
+        off|none|0)
+            rm -f "$BUDGET_FILE"
+            echo -e "${GREEN}✔ Budget cap removed.${NC}"
+            ;;
+        *)
+            local cap; cap=$(_parse_tokens "$arg")
+            if [ "$cap" -le 0 ]; then
+                die "invalid budget '$arg' — use a number like 100k, 1.5m, or 100000"
+            fi
+            local was_paused=false
+            [ -f "$PAUSE_FLAG" ] && grep -q '^Budget cap' "$PAUSE_FLAG" 2>/dev/null && was_paused=true
+            _budget_write "$cap" 0
+            $was_paused && rm -f "$PAUSE_FLAG"
+            echo -e "${GREEN}✔ Budget set: $(_fmt_tokens "$cap") estimated reads per session.${NC}"
+            $was_paused && echo -e "   ${GREEN}▶ Previous budget pause lifted.${NC}"
+            echo -e "   ${DIM}Warns at 80%, hard-pauses the project at 100%. Needs gate hooks: ${CYAN}tokenso claude install${NC}"
+            if ! grep -q 'tokenso hook guard-read' .claude/settings.json 2>/dev/null; then
+                echo -e "   ${YELLOW}⚠  guard-read hook not installed — budget cannot be tracked. Run: ${CYAN}tokenso claude install${NC}"
+            fi
+            ;;
+    esac
 }
 
 # Merge/remove tokenso-owned hooks in a Claude Code settings file.
@@ -6006,6 +6113,10 @@ case "$1" in
     resume)
         shift
         run_resume "$@"
+        ;;
+    budget)
+        shift
+        run_budget "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;

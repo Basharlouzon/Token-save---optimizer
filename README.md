@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.8.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.9.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,9 +26,21 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.8.0
+## 🆕 What's New in 3.9.0
 
-> **Pause Switch** — `tokenso pause` hard-blocks ALL Claude Code usage in a project (zero token burn) until you run `tokenso resume` ([ADR-0009](docs/adr/0009-pause-switch.md))
+> **Token Budget Gate** — `tokenso budget 100k` caps estimated reads per session and auto-pauses the project when you hit the ceiling. Ultra effort, capped spend ([ADR-0010](docs/adr/0010-budget-gate.md))
+
+| Feature                   | Description                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------|
+| 🎯 **`tokenso budget N`** | Per-session token cap (`100k` / `1.5m` / `100000`); resets each Claude Code session                                        |
+| 🛑 **Auto-pause on cross**| At 100% the project hard-pauses (reuses the zero-cost gate); `tokenso resume` or `tokenso budget <bigger>` lifts it         |
+| ⚠ **80% warn band**       | Statusline turns amber `⚠ tokenso ⏐ budget 87k/100k` before the freeze — no surprise cliff                                  |
+| 🧮 **Honest estimate**    | Tallies guarded-read bytes only, labeled as an estimate (per [ADR-0005](docs/adr/0005-honest-telemetry.md)) — never faked   |
+| 🔌 **No new hooks**       | Folded into the existing read-guard; `tokenso claude install` already wires it                                              |
+
+### v3.8.0 — Pause Switch
+
+> `tokenso pause` hard-blocks ALL Claude Code usage in a project (zero token burn) until you run `tokenso resume` ([ADR-0009](docs/adr/0009-pause-switch.md))
 
 | Feature                  | Description                                                                                                                     |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------|
