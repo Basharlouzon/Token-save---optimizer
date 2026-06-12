@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.6.0"
+VERSION="3.7.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -775,6 +775,7 @@ _show_commands() {
     echo -e "  ${CYAN}brief${NC}     Auto-generate architecture briefing for AI agents"
     echo -e "  ${CYAN}graph${NC}     Read token memory graph (use --json for raw)"
     echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
+    echo -e "  ${CYAN}claude${NC}    Native Claude Code hooks + statusline (install/status/uninstall)"
     echo -e "  ${CYAN}help${NC}      Show this screen"
     echo ""
 }
@@ -5632,6 +5633,240 @@ run_brief() {
     fi
 }
 
+# ─── CLAUDE CODE INTEGRATION (ADR-0008) ─────────────────────────────────────
+
+# Extract a string/number field from a JSON document. Usage: _json_field <json> <dotted.path>
+# Uses python3 when available; falls back to a last-segment sed scrape (strings only).
+_json_field() {
+    local json="$1" path="$2"
+    if command -v python3 &>/dev/null; then
+        printf '%s' "$json" | python3 -c '
+import json, sys
+try:
+    o = json.load(sys.stdin)
+    for p in sys.argv[1].split("."):
+        o = o[p]
+    if o is not None:
+        print(o)
+except Exception:
+    pass
+' "$path" 2>/dev/null
+    else
+        local key="${path##*.}"
+        printf '%s' "$json" | sed -n 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    fi
+}
+
+# Hook entry points invoked by Claude Code (configured via `tokenso claude install`).
+run_hook() {
+    local event="${1:-}"
+    case "$event" in
+        session-start)
+            # stdout from a SessionStart hook is injected into Claude's context.
+            local state=".ai-memory/state.md" sym=".ai-memory/symbol-map.txt" map=".ai-memory/repo-map.txt"
+            echo "## Tokenso session context (auto-injected)"
+            if [ -f "$state" ]; then
+                echo '### Memory state (.ai-memory/state.md)'
+                head -40 "$state"
+                echo ""
+            fi
+            if [ -f "$sym" ]; then
+                local nsym; nsym=$(wc -l < "$sym" | tr -d ' ')
+                echo "- Symbol map: ${nsym} symbols indexed. Run \`tokenso symbols <name>\` (path:line) BEFORE opening files."
+            fi
+            [ -f "$map" ] && echo "- Repo map: read .ai-memory/repo-map.txt instead of ls -R / Glob sweeps."
+            echo "- Large blind file reads are guarded; read specific line ranges instead."
+            ;;
+        guard-read)
+            # PreToolUse(Read): block whole-file reads of large files, point to symbol/range reads.
+            # Exit 2 + stderr = blocked with feedback to Claude; exit 0 = allowed.
+            [ "${TOKENSO_GUARD_DISABLE:-0}" = "1" ] && return 0
+            local payload; payload=$(cat 2>/dev/null)
+            [ -z "$payload" ] && return 0
+            local fp; fp=$(_json_field "$payload" "tool_input.file_path")
+            { [ -z "$fp" ] || [ ! -f "$fp" ]; } && return 0
+            case "$fp" in
+                *.ai-memory/*|*CLAUDE.md) return 0 ;;
+            esac
+            # Ranged reads already follow the diet — let them through.
+            printf '%s' "$payload" | grep -q '"offset"[[:space:]]*:\|"limit"[[:space:]]*:' && return 0
+            local bytes est threshold
+            bytes=$(wc -c < "$fp" | tr -d ' ')
+            est=$(( bytes / 4 ))
+            threshold="${TOKENSO_READ_GUARD_TOKENS:-2000}"
+            [ "$est" -le "$threshold" ] && return 0
+            {
+                echo "Tokenso read-guard: $fp is ~${est} tokens (limit ${threshold} for blind full-file reads)."
+                echo "Instead: 1) run \`tokenso symbols <name>\` to get path:line, then 2) Read with offset/limit around that line."
+                echo "If the whole file is genuinely required, re-Read with an explicit offset (e.g. offset=1) to bypass this guard."
+            } >&2
+            exit 2
+            ;;
+        precompact)
+            cat >/dev/null 2>&1
+            run_save --silent "auto: pre-compact checkpoint" >/dev/null 2>&1 || true
+            ;;
+        session-end)
+            cat >/dev/null 2>&1
+            run_save --silent "auto: session end" >/dev/null 2>&1 || true
+            ;;
+        *)
+            die "unknown hook event: '$event' (expected session-start|guard-read|precompact|session-end)"
+            ;;
+    esac
+}
+
+# Claude Code statusline: one line, fast, reads stdin JSON + optimizer-stats.json.
+run_statusline() {
+    local payload=""
+    [ -t 0 ] || payload=$(cat 2>/dev/null)
+    local stats=".ai-memory/optimizer-stats.json"
+    if [ ! -f "$stats" ]; then
+        echo "🧠 tokenso: not initialized — run \`tokenso install\`"
+        return 0
+    fi
+    local sessions saved saved_h usd model
+    sessions=$(sed -n 's/.*"sessions":[[:space:]]*\([0-9]*\).*/\1/p' "$stats" | head -1)
+    saved=$(sed -n 's/.*"cumulative_saved":[[:space:]]*\([0-9]*\).*/\1/p' "$stats" | head -1)
+    saved=${saved:-0}
+    if [ "$saved" -ge 1000000 ]; then
+        saved_h=$(awk -v s="$saved" 'BEGIN{printf "%.1fM", s/1000000}')
+    elif [ "$saved" -ge 1000 ]; then
+        saved_h=$(awk -v s="$saved" 'BEGIN{printf "%.0fk", s/1000}')
+    else
+        saved_h="$saved"
+    fi
+    usd=$(_cost_compute "$saved" "$COST_PER_1M")
+    model=$(_json_field "$payload" "model.display_name")
+    local line="🧠 tokenso ⏐ saved ~${saved_h} tokens (≈\$${usd}) ⏐ ${sessions:-0} sessions"
+    [ -n "$model" ] && line="$line ⏐ $model"
+    echo "$line"
+}
+
+# Merge/remove tokenso-owned hooks in a Claude Code settings file.
+_claude_hooks_write() {
+    local mode="$1" target="$2"
+    if ! command -v python3 &>/dev/null; then
+        if [ "$mode" = "install" ] && [ ! -f "$target" ]; then
+            mkdir -p "$(dirname "$target")"
+            cat > "$target" << 'JSON_EOF'
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "tokenso hook session-start" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Read", "hooks": [{ "type": "command", "command": "tokenso hook guard-read" }] }
+    ],
+    "PreCompact": [
+      { "hooks": [{ "type": "command", "command": "tokenso hook precompact" }] }
+    ]
+  },
+  "statusLine": { "type": "command", "command": "tokenso statusline" }
+}
+JSON_EOF
+            return 0
+        fi
+        die "python3 is required to merge into an existing $target — install python3 or edit the file manually (see docs/adr/0008-claude-code-hooks.md)"
+    fi
+    mkdir -p "$(dirname "$target")"
+    python3 - "$mode" "$target" << 'PY_EOF'
+import json, os, sys
+
+mode, target = sys.argv[1], sys.argv[2]
+data = {}
+if os.path.exists(target):
+    with open(target) as f:
+        text = f.read().strip()
+    data = json.loads(text) if text else {}
+
+OWNED = "tokenso "
+
+def owned(entry):
+    return any(OWNED in h.get("command", "")
+               for h in entry.get("hooks", []) if h.get("type") == "command")
+
+hooks = data.setdefault("hooks", {})
+spec = {
+    "SessionStart": (None, "tokenso hook session-start"),
+    "PreToolUse": ("Read", "tokenso hook guard-read"),
+    "PreCompact": (None, "tokenso hook precompact"),
+}
+for event, (matcher, cmd) in spec.items():
+    entries = [e for e in hooks.get(event, []) if not owned(e)]
+    if mode == "install":
+        entry = {"hooks": [{"type": "command", "command": cmd}]}
+        if matcher:
+            entry["matcher"] = matcher
+        entries.append(entry)
+    if entries:
+        hooks[event] = entries
+    else:
+        hooks.pop(event, None)
+if not hooks:
+    data.pop("hooks", None)
+
+sl = data.get("statusLine") or {}
+if mode == "install":
+    if not sl or OWNED in sl.get("command", ""):
+        data["statusLine"] = {"type": "command", "command": "tokenso statusline"}
+elif OWNED in sl.get("command", ""):
+    data.pop("statusLine", None)
+
+with open(target, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY_EOF
+}
+
+run_claude() {
+    local sub="${1:-status}"
+    [ $# -gt 0 ] && shift
+    local target=".claude/settings.json"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --local) target=".claude/settings.local.json"; shift ;;
+            *) shift ;;
+        esac
+    done
+    case "$sub" in
+        install)
+            _claude_hooks_write install "$target" || return 1
+            echo -e "${GREEN}✅ Claude Code hooks installed in ${target}${NC}"
+            echo -e "   ${DIM}SessionStart${NC}  injects memory state + map stats (~150 tokens, zero exploration)"
+            echo -e "   ${DIM}PreToolUse${NC}    guards blind reads of files > \${TOKENSO_READ_GUARD_TOKENS:-2000} tokens"
+            echo -e "   ${DIM}PreCompact${NC}    checkpoints .ai-memory/state.md before compaction"
+            echo -e "   ${DIM}statusLine${NC}    live savings in the Claude Code status bar"
+            echo -e "   ${DIM}Takes effect on the next Claude Code session. Remove with: tokenso claude uninstall${NC}"
+            ;;
+        uninstall)
+            if [ ! -f "$target" ]; then
+                echo -e "${YELLOW}Nothing to remove — ${target} does not exist.${NC}"
+                return 0
+            fi
+            _claude_hooks_write uninstall "$target" || return 1
+            echo -e "${GREEN}✅ Tokenso hooks removed from ${target}${NC} ${DIM}(other settings preserved)${NC}"
+            ;;
+        status)
+            if [ -f "$target" ] && grep -q 'tokenso hook' "$target" 2>/dev/null; then
+                echo -e "${GREEN}✅ Tokenso hooks active in ${target}${NC}"
+                grep -o 'tokenso hook [a-z-]*\|tokenso statusline' "$target" | sort -u | sed 's/^/   • /'
+            else
+                echo -e "${YELLOW}○ No Tokenso hooks in ${target}${NC} — run ${CYAN}tokenso claude install${NC}"
+            fi
+            ;;
+        help|--help|-h)
+            echo -e "${BOLD}tokenso claude${NC} — native Claude Code integration (hooks + statusline)"
+            echo -e "  ${CYAN}install${NC}    [--local]  Merge Tokenso hooks into .claude/settings.json"
+            echo -e "  ${CYAN}status${NC}     [--local]  Show which Tokenso hooks are active"
+            echo -e "  ${CYAN}uninstall${NC}  [--local]  Remove only Tokenso-owned hooks"
+            ;;
+        *)
+            die "unknown subcommand: 'claude $sub' (expected install|status|uninstall)"
+            ;;
+    esac
+}
+
 # ─── ROUTER ─────────────────────────────────────────────────────────────────
 case "$1" in
     run)
@@ -5697,6 +5932,18 @@ case "$1" in
     sessions)
         shift
         run_sessions "$@"
+        ;;
+    claude)
+        shift
+        run_claude "$@"
+        ;;
+    hook)
+        shift
+        run_hook "$@"
+        ;;
+    statusline)
+        shift
+        run_statusline "$@"
         ;;
     --version|-v)     show_version ;;
     help|--help|-h)   show_dashboard ;;

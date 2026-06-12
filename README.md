@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.6.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.7.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,23 +26,25 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.6.0
+## 🆕 What's New in 3.7.0
 
-> **Enhanced AI Tool Detection** — detect Cline, VS Code, Cursor by process + extension + config
+> **Native Claude Code Integration** — Tokenso savings are now *enforced by the harness*, not just suggested in CLAUDE.md ([ADR-0008](docs/adr/0008-claude-code-hooks.md))
 
-| Feature                       | Description                                                                                                                                     |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🤖 **3-Layer Detection**      | Config files + running processes + VS Code extension scanning for 16+ AI tools                                                                  |
-| 🟢 **Live Status Icons**      | `tokenso graph` shows 🟢 running, 🔵 config, 🟡 extension, 🟣 global for each tool                                                            |
-| 📊 **Cline Detection**        | Detects Cline via `.clinerules` config + VS Code extension directory scan                                                                       |
-| 🖥️ **VS Code Detection**      | Detects Visual Studio Code via running process + `.vscode/` workspace directory                                                                 |
-| 📊 **`tokenso graph`**        | CLI command to read and display the token memory graph with cognitive nodes, token distribution, session deltas, synapse connections            |
-| 🧠 **Real Token Detection**   | Integrates tiktoken (cl100k_base) for accurate token counting; falls back to words×13/10 heuristic                                              |
+| Feature                        | Description                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🪝 **`tokenso claude install`** | Merges Tokenso hooks into `.claude/settings.json` (preserves your existing settings; `--local` for settings.local.json)                       |
+| 🚀 **SessionStart hook**       | Injects memory state + symbol-map stats (~150 tokens) at session start — zero exploration needed                                              |
+| 🛡️ **Read guard**              | Blocks blind full-file reads over `TOKENSO_READ_GUARD_TOKENS` (default 2000) and redirects Claude to `tokenso symbols` + line-range reads     |
+| 💾 **PreCompact checkpoint**   | Auto-runs `tokenso save` before context compaction so memory survives                                                                          |
+| 📟 **Statusline**              | Live `🧠 tokenso ⏐ saved ~5.3M tokens (≈$15.83)` in the Claude Code status bar                                                                 |
+| 🔍 **`tokenso claude status`** | Shows which hooks are active; `tokenso claude uninstall` removes only Tokenso-owned entries                                                    |
 
 <details>
 <summary><strong>📜 Release History</strong></summary>
 
 <br />
+
+**v3.6.0** — Enhanced AI tool detection: Cline, VS Code, Cursor by process + extension + config; live status icons in `tokenso graph`
 
 **v3.4.0** — Real tokenizer + enhanced memory graph: tiktoken integration, 10 cognitive nodes, token distribution
 **v3.3.0** — Enhanced memory graph: token distribution, session delta, token density, 10 cognitive nodes
