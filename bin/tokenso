@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.9.0"
+VERSION="3.10.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -4191,6 +4191,50 @@ print_mindmap_frame() {
     echo -e "     ${c_ms}[Memory State]${NC}                             ${c_sm}[Semantic Map]${NC}"
 }
 
+# Compute Claude Code integration state for the run cockpit (ADR-0008/0009/0010).
+# Sets: CC_NODE (one-line node label), CC_HOOKS, CC_PAUSE, CC_BUDGET, CC_HINT.
+_gui_compute_cc() {
+    local settings=".claude/settings.json"
+    local installed=false
+    grep -q 'tokenso hook' "$settings" 2>/dev/null && installed=true
+
+    if $installed; then
+        local n; n=$(grep -o 'tokenso hook [a-z-]*' "$settings" | sort -u | wc -l | tr -d ' ')
+        CC_HOOKS="${n} hooks active (session-start, read-guard, gate, precompact)"
+    else
+        CC_HOOKS="not installed — run \`tokenso claude install\`"
+    fi
+
+    if [ -f "$PAUSE_FLAG" ]; then
+        local reason; reason=$(sed -n '1p' "$PAUSE_FLAG" 2>/dev/null)
+        CC_PAUSE="PAUSED — ${reason:-usage blocked}"
+    else
+        CC_PAUSE="active (not paused)"
+    fi
+
+    local cap; cap=$(_budget_get cap)
+    if [ "$cap" -gt 0 ]; then
+        local used pct; used=$(_budget_get used); pct=$(( used * 100 / cap ))
+        CC_BUDGET="$(_fmt_tokens "$used")/$(_fmt_tokens "$cap") (${pct}%) this session"
+    else
+        CC_BUDGET="no cap set — \`tokenso budget 100k\`"
+    fi
+
+    if ! $installed; then
+        CC_NODE="hooks not installed"
+        CC_HINT="Install harness hooks for enforced savings: ${CYAN}tokenso claude install${NC}"
+    elif [ -f "$PAUSE_FLAG" ]; then
+        CC_NODE="PAUSED — resume to work"
+        CC_HINT="Project is paused. Resume with: ${CYAN}tokenso resume${NC}"
+    elif [ "$cap" -gt 0 ]; then
+        CC_NODE="hooks + budget cap live"
+        CC_HINT=""
+    else
+        CC_NODE="hooks live, no budget cap"
+        CC_HINT=""
+    fi
+}
+
 run_gui() {
     clear
     echo -e "${BBLUE}"
@@ -4238,9 +4282,10 @@ run_gui() {
         node_tm="No prior sessions — first run"
     fi
 
-    local scan_targets=("Workspace Code" "Context Rules" "Memory State" "Semantic Map" "Token Memory" "Tokenso Core")
-    local scan_details=("$node_ws" "$node_cr" "$node_ms" "$node_sm" "$node_tm" "v$VERSION optimization engine")
-    local scan_colors=("$BCYAN" "$MAGENTA" "$YELLOW" "$BGREEN" "$BRED" "$BBLUE")
+    _gui_compute_cc
+    local scan_targets=("Workspace Code" "Context Rules" "Memory State" "Semantic Map" "Token Memory" "Claude Code" "Tokenso Core")
+    local scan_details=("$node_ws" "$node_cr" "$node_ms" "$node_sm" "$node_tm" "$CC_NODE" "v$VERSION optimization engine")
+    local scan_colors=("$BCYAN" "$MAGENTA" "$YELLOW" "$BGREEN" "$BRED" "$BGREEN" "$BBLUE")
     local scan_count=${#scan_targets[@]}
 
     for ((i=0; i<scan_count; i++)); do
@@ -4266,6 +4311,7 @@ run_gui() {
     _gui_draw_connection "Memory State" "$YELLOW" "Tokenso Core" "$BBLUE" 0.1
     _gui_draw_connection "Token Memory" "$BRED" "Semantic Map" "$BGREEN" 0.12
     _gui_draw_connection "Token Memory" "$BRED" "Memory State" "$YELLOW" 0.12
+    _gui_draw_connection "Claude Code" "$BGREEN" "Tokenso Core" "$BBLUE" 0.12
     echo ""
 
     # ── Phase 3: Token Memory Recall ──
@@ -4328,8 +4374,21 @@ run_gui() {
     echo -e "  ${BOLD}Raw Estimate:${NC}       ${RED}$(fmt_num $raw_tokens)${NC} tokens"
     echo -e "  ${BOLD}Optimized Map:${NC}      ${GREEN}$(fmt_num $map_tokens)${NC} tokens"
     echo -e "  ${BOLD}Tokens Saved:${NC}       ${YELLOW}$(fmt_num $saved_tokens)${NC} tokens  ${DIM}(\$$(cost_usd $saved_tokens) est.)${NC}"
-    echo -e "  ${BOLD}Nodes Connected:${NC}    ${CYAN}6${NC} cognitive modules linked"
+    echo -e "  ${BOLD}Nodes Connected:${NC}    ${CYAN}7${NC} cognitive modules linked"
     echo -e "  ${BOLD}Token Memory:${NC}      ${BRED}$(fmt_num $CUMULATIVE_SAVED)${NC} tokens recalled across ${CYAN}${SESSIONS}${NC} sessions"
+    echo ""
+
+    # ── Claude Code integration cockpit (ADR-0008/0009/0010) ──
+    local cc_hooks_icon cc_pause_icon cc_budget_icon
+    case "$CC_HOOKS" in *"not installed"*) cc_hooks_icon="${RED}✗${NC}" ;; *) cc_hooks_icon="${GREEN}✓${NC}" ;; esac
+    case "$CC_PAUSE" in *PAUSED*) cc_pause_icon="${YELLOW}⏸${NC}" ;; *) cc_pause_icon="${GREEN}▶${NC}" ;; esac
+    case "$CC_BUDGET" in *"no cap"*) cc_budget_icon="${DIM}○${NC}" ;; *) cc_budget_icon="${CYAN}🎯${NC}" ;; esac
+    echo -e "  ${BOLD}🤖 Claude Code Integration${NC}"
+    echo -e "  ${DIM}─────────────────────────────────────────${NC}"
+    echo -e "    ${cc_hooks_icon}  Hooks:   ${DIM}${CC_HOOKS}${NC}"
+    echo -e "    ${cc_pause_icon}  Status:  ${DIM}${CC_PAUSE}${NC}"
+    echo -e "    ${cc_budget_icon}  Budget:  ${DIM}${CC_BUDGET}${NC}"
+    [ -n "$CC_HINT" ] && echo -e "    ${YELLOW}→${NC}  ${CC_HINT}"
     echo ""
 
     # ── Phase 6: Save & export token memory graph ──

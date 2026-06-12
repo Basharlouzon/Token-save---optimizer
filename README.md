@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.9.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.10.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,9 +26,19 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.9.0
+## 🆕 What's New in 3.10.0
 
-> **Token Budget Gate** — `tokenso budget 100k` caps estimated reads per session and auto-pauses the project when you hit the ceiling. Ultra effort, capped spend ([ADR-0010](docs/adr/0010-budget-gate.md))
+> **`tk run` is now the Claude Code cockpit** — the cognitive mindmap surfaces your live integration state and tells you what to do next
+
+| Feature                       | Description                                                                                                       |
+| ----------------------------- | -----------------------------------------------------------------------------------------------------------------|
+| 🤖 **Integration panel**      | `tk run` shows hooks ✓/✗, pause ▶/⏸, and budget 🎯/○ status at a glance                                          |
+| 🧭 **Actionable hints**       | Not installed? Paused? The panel prints the exact command to fix it (`tokenso claude install` / `resume`)         |
+| 🕸️ **7th cognitive node**     | A new "Claude Code" node joins the scan + synapse animation, wired to Tokenso Core                                |
+
+### v3.9.0 — Token Budget Gate
+
+> `tokenso budget 100k` caps estimated reads per session and auto-pauses the project when you hit the ceiling ([ADR-0010](docs/adr/0010-budget-gate.md))
 
 | Feature                   | Description                                                                                                                  |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------|
