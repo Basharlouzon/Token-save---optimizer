@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.11.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.12.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,9 +26,19 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.11.0
+## 🆕 What's New in 3.12.0
 
-> **Command polish** — the help screen is now grouped by purpose, with focused per-command help and `tokenso claude` subcommands
+> **2026 Claude pricing** — the ROI table and HTML dashboard now use the current Claude lineup (Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5)
+
+| Feature                       | Description                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------|
+| 💰 **Current model rates**    | `tokenso stats` ROI table updated to Fable 5 ($10), Opus 4.8 ($5), Sonnet 4.6 ($3), Haiku 4.5 ($1)  |
+| 🖥️ **Dashboard sync**         | HTML ROI simulator buttons + rates match the 2026 Claude lineup                                     |
+| 📏 **Honest basis**           | Rates labeled as input ($/1M) — the read/input tokens Tokenso actually saves                        |
+
+### v3.11.0 — Command Polish
+
+> Grouped help screen, focused per-command help, and `tokenso claude` subcommands
 
 | Feature                       | Description                                                                                                         |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------|

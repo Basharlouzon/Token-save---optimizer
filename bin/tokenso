@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.11.0"
+VERSION="3.12.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -727,21 +727,23 @@ show_dashboard() {
     printf "  %-20s %-10s %-15s %s\n" "Model" "Rate/1M" "This Session" "All-Time"
     printf "  %-20s %-10s %-15s %s\n" "─────" "───────" "────────────" "────────"
     
+    # 2026 Claude model lineup — input (read) $/1M, the tokens Tokenso actually saves.
+    local fable_sess=$(cost_usd_rate $SAVED_TOKENS 10.00)
+    local fable_cum=$(cost_usd_rate $CUMULATIVE_SAVED 10.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Fable 5" "\$10.00" "\$${fable_sess}" "\$${fable_cum}"
+
+    local opus_sess=$(cost_usd_rate $SAVED_TOKENS 5.00)
+    local opus_cum=$(cost_usd_rate $CUMULATIVE_SAVED 5.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Opus 4.8" "\$5.00" "\$${opus_sess}" "\$${opus_cum}"
+
     local sonnet_sess=$(cost_usd_rate $SAVED_TOKENS 3.00)
     local sonnet_cum=$(cost_usd_rate $CUMULATIVE_SAVED 3.00)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Sonnet 4" "\$3.00" "\$${sonnet_sess}" "\$${sonnet_cum}"
-    
-    local opus_sess=$(cost_usd_rate $SAVED_TOKENS 15.00)
-    local opus_cum=$(cost_usd_rate $CUMULATIVE_SAVED 15.00)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Opus 4" "\$15.00" "\$${opus_sess}" "\$${opus_cum}"
-    
-    local gemini_sess=$(cost_usd_rate $SAVED_TOKENS 1.25)
-    local gemini_cum=$(cost_usd_rate $CUMULATIVE_SAVED 1.25)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Gemini 2.5 Pro" "\$1.25" "\$${gemini_sess}" "\$${gemini_cum}"
-    
-    local gpt4o_sess=$(cost_usd_rate $SAVED_TOKENS 2.00)
-    local gpt4o_cum=$(cost_usd_rate $CUMULATIVE_SAVED 2.00)
-    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "GPT-4.1" "\$2.00" "\$${gpt4o_sess}" "\$${gpt4o_cum}"
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Sonnet 4.6" "\$3.00" "\$${sonnet_sess}" "\$${sonnet_cum}"
+
+    local haiku_sess=$(cost_usd_rate $SAVED_TOKENS 1.00)
+    local haiku_cum=$(cost_usd_rate $CUMULATIVE_SAVED 1.00)
+    printf "  %-20s %-10s \033[1;32m%-15s\033[0m \033[1;32m%s\033[0m\n" "Claude Haiku 4.5" "\$1.00" "\$${haiku_sess}" "\$${haiku_cum}"
+    echo -e "  ${DIM}Rates = input \$/1M tokens, 2026 Claude lineup. Savings apply to read/input tokens.${NC}"
     echo ""
 
     # ── Memory state ──
@@ -1964,16 +1966,16 @@ EOF
             border-color: rgba(255, 214, 10, 0.3);
         }
         .model-btn[data-model="opus"].active h4 { color: var(--gold); }
-        .model-btn[data-model="gemini"].active {
+        .model-btn[data-model="fable"].active {
             background: rgba(191, 90, 242, 0.05);
             border-color: rgba(191, 90, 242, 0.3);
         }
-        .model-btn[data-model="gemini"].active h4 { color: var(--purple); }
-        .model-btn[data-model="gpt4o"].active {
+        .model-btn[data-model="fable"].active h4 { color: var(--purple); }
+        .model-btn[data-model="haiku"].active {
             background: rgba(0, 230, 118, 0.05);
             border-color: rgba(0, 230, 118, 0.3);
         }
-        .model-btn[data-model="gpt4o"].active h4 { color: var(--emerald); }
+        .model-btn[data-model="haiku"].active h4 { color: var(--emerald); }
         
         /* ROI display cards */
         .roi-displays {
@@ -2278,21 +2280,21 @@ EOF
                         
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
                         <div class="model-select-grid">
-                            <button class="model-btn active" data-model="sonnet">
-                                <h4>Claude Sonnet 4</h4>
-                                <p>$3.00/1M</p>
+                            <button class="model-btn" data-model="fable">
+                                <h4>Claude Fable 5</h4>
+                                <p>$10.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="opus">
-                                <h4>Claude Opus 4</h4>
-                                <p>$15.00/1M</p>
+                                <h4>Claude Opus 4.8</h4>
+                                <p>$5.00/1M</p>
                             </button>
-                            <button class="model-btn" data-model="gemini">
-                                <h4>Gemini 2.5 Pro</h4>
-                                <p>$1.25/1M</p>
+                            <button class="model-btn active" data-model="sonnet">
+                                <h4>Claude Sonnet 4.6</h4>
+                                <p>$3.00/1M</p>
                             </button>
-                            <button class="model-btn" data-model="gpt4o">
-                                <h4>GPT-4.1</h4>
-                                <p>$2.00/1M</p>
+                            <button class="model-btn" data-model="haiku">
+                                <h4>Claude Haiku 4.5</h4>
+                                <p>$1.00/1M</p>
                             </button>
                         </div>
                     </div>
@@ -2797,10 +2799,10 @@ EOF
 
         // ROI Simulator engine
         const models = {
-            sonnet: { name: 'Claude Sonnet 4', rate: 3.00 },
-            opus: { name: 'Claude Opus 4', rate: 15.00 },
-            gemini: { name: 'Gemini 2.5 Pro', rate: 1.25 },
-            gpt4o: { name: 'GPT-4.1', rate: 2.00 }
+            fable: { name: 'Claude Fable 5', rate: 10.00 },
+            opus: { name: 'Claude Opus 4.8', rate: 5.00 },
+            sonnet: { name: 'Claude Sonnet 4.6', rate: 3.00 },
+            haiku: { name: 'Claude Haiku 4.5', rate: 1.00 }
         };
         let selectedModel = 'sonnet';
         

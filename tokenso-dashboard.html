@@ -16,31 +16,83 @@
 
     <script>
     window.TOKENSO_DATA = {
-        version: "2.9.0",
+        version: "3.11.0",
         projectName: "claudememory",
-        dateExported: "2026-06-01 15:21",
-        activeAgents: "Claude Code Claude Code (CLAUDE.md) Kilo Gemini CLI / Antigravity Antigravity ✓ global",
-        filesCount: 11,
-        symbolCount: 178,
-        rawTokens: 29853,
-        mapTokens: 81,
-        savedTokens: 29772,
+        dateExported: "2026-06-12 05:33",
+        activeAgents: "Claude Code Claude Code (CLAUDE.md) Cline Kilo Gemini CLI / Antigravity Antigravity ✓ global",
+        filesCount: 24,
+        symbolCount: 206,
+        rawTokens: 56984,
+        mapTokens: 185,
+        savedTokens: 56799,
         pct: 99,
-        compRatio: "368.5",
-        costSaved: "0.0893",
-        sessions: 39,
-        cumulativeSaved: 1089736,
-        costCum: "3.2692",
-        history: [22726,22847,22847,22847,29243,29243,29243,29243,29243,29243],
-        milestones: ["test", "tes", "update flag", "update", "test"],
+        compRatio: "308.0",
+        costSaved: "0.1703",
+        sessions: 160,
+        cumulativeSaved: 6982039,
+        costCum: "20.9461",
+        history: [56118,56118,56130,56130,56244,56244,56244,56244,56752,56752],
+        milestones: ["Memory graph with 8 cognitive nodes live", "tokenso brief command for architecture briefing", "HTML dashboard with SVG graph visualization", "Token trend detection (stable/improving/declining)", "auto: pre-compact checkpoint"],
         observed: {
-            wrapSessions: 0,
+            wrapSessions: 1,
             reads: 0,
             searches: 0,
             bash: 0,
             edits: 0,
             bytesRead: 0
-        }
+        },
+        memoryGraph: {
+  "schema": 2,
+  "version": "3.11.0",
+  "generated": "2026-06-12 05:30",
+  "project": "claudememory",
+  "nodes": {
+    "workspace_code": { "raw_tokens": 56937, "files": 24 },
+    "semantic_map": { "map_tokens": 185, "compression_pct": 99 },
+    "token_memory": {
+      "sessions": 160,
+      "cumulative_saved": 6982039,
+      "history": [56118, 56118, 56130, 56130, 56244, 56244, 56244, 56244, 56752, 56752],
+      "trend": "stable",
+      "avg_per_session": 56297,
+      "peak_session": 56752,
+      "min_session": 56118,
+      "last_session": 56752,
+      "efficiency_pct": 98
+    },
+    "observed_metrics": {
+      "total_wrap_sessions": 1,
+      "total_reads": 0,
+      "total_searches": 0,
+      "total_bash": 0,
+      "total_edits": 0,
+      "total_bytes_read": 0,
+      "avg_reads_per_session": 0,
+      "avg_edits_per_session": 0
+    },
+    "memory_state": { "milestones": ["Memory graph with 8 cognitive nodes live", "tokenso brief command for architecture briefing", "HTML dashboard with SVG graph visualization", "Token trend detection (stable/improving/declining)", "auto: pre-compact checkpoint"] },
+    "milestone_analysis": {
+      "total_milestones": 5,
+      "recent_milestones": ["Memory graph with 8 cognitive nodes live", "tokenso brief command for architecture briefing", "HTML dashboard with SVG graph visualization", "Token trend detection (stable/improving/declining)", "auto: pre-compact checkpoint"],
+      "has_low_signal": false
+    },
+    "context_rules": { "active_agents": "Claude Code Claude Code (CLAUDE.md) Cline Kilo Gemini CLI / Antigravity Antigravity ✓ global" },
+    "tokenso_core": { "version": "3.11.0" },
+    "token_distribution": { "directories": [{"dir":"bin","tokens":34697},{"dir":"(root)","tokens":7756},{"dir":"docs/adr","tokens":7621},{"dir":"docs/superpowers/plans","tokens":2711},{"dir":"scripts","tokens":2669}], "token_density": 2372 },
+    "session_delta": { "tokens": 0, "pct": 0 }
+  },
+  "edges": [
+    { "from": "workspace_code", "to": "semantic_map", "data": "raw→compressed (99% reduction)" },
+    { "from": "token_memory", "to": "memory_state", "data": "sessions→milestones" },
+    { "from": "context_rules", "to": "memory_state", "data": "rules→state tracking" },
+    { "from": "semantic_map", "to": "tokenso_core", "data": "map→optimization" },
+    { "from": "memory_state", "to": "tokenso_core", "data": "state→engine" },
+    { "from": "token_memory", "to": "semantic_map", "data": "history→compression trend" },
+    { "from": "observed_metrics", "to": "token_memory", "data": "observed→estimated correlation" },
+    { "from": "milestone_analysis", "to": "memory_state", "data": "quality→state health" },
+    { "from": "tokenso_core", "to": "observed_metrics", "data": "engine→real metrics" }
+  ]
+}
     };
     </script>
     <style>
@@ -359,7 +411,9 @@
             .toast,
             .roi-flex .slider,
             .model-select-grid,
-            .chart-point:hover { display: none !important; }
+            .chart-point:hover,
+            #btn-copy-md,
+            #btn-print { display: none !important; }
             .panel-subtitle, .stat-info h3, .details-item span:first-child { color: #555 !important; }
             footer p, footer a { color: #555 !important; }
             a { text-decoration: underline; }
@@ -597,16 +651,16 @@
             border-color: rgba(255, 214, 10, 0.3);
         }
         .model-btn[data-model="opus"].active h4 { color: var(--gold); }
-        .model-btn[data-model="gemini"].active {
+        .model-btn[data-model="fable"].active {
             background: rgba(191, 90, 242, 0.05);
             border-color: rgba(191, 90, 242, 0.3);
         }
-        .model-btn[data-model="gemini"].active h4 { color: var(--purple); }
-        .model-btn[data-model="gpt4o"].active {
+        .model-btn[data-model="fable"].active h4 { color: var(--purple); }
+        .model-btn[data-model="haiku"].active {
             background: rgba(0, 230, 118, 0.05);
             border-color: rgba(0, 230, 118, 0.3);
         }
-        .model-btn[data-model="gpt4o"].active h4 { color: var(--emerald); }
+        .model-btn[data-model="haiku"].active h4 { color: var(--emerald); }
         
         /* ROI display cards */
         .roi-displays {
@@ -911,21 +965,21 @@
                         
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px;">Select AI Model Pricing:</div>
                         <div class="model-select-grid">
-                            <button class="model-btn active" data-model="sonnet">
-                                <h4>Claude Sonnet 4</h4>
-                                <p>$3.00/1M</p>
+                            <button class="model-btn" data-model="fable">
+                                <h4>Claude Fable 5</h4>
+                                <p>$10.00/1M</p>
                             </button>
                             <button class="model-btn" data-model="opus">
-                                <h4>Claude Opus 4</h4>
-                                <p>$15.00/1M</p>
+                                <h4>Claude Opus 4.8</h4>
+                                <p>$5.00/1M</p>
                             </button>
-                            <button class="model-btn" data-model="gemini">
-                                <h4>Gemini 2.5 Pro</h4>
-                                <p>$1.25/1M</p>
+                            <button class="model-btn active" data-model="sonnet">
+                                <h4>Claude Sonnet 4.6</h4>
+                                <p>$3.00/1M</p>
                             </button>
-                            <button class="model-btn" data-model="gpt4o">
-                                <h4>GPT-4.1</h4>
-                                <p>$2.00/1M</p>
+                            <button class="model-btn" data-model="haiku">
+                                <h4>Claude Haiku 4.5</h4>
+                                <p>$1.00/1M</p>
                             </button>
                         </div>
                     </div>
@@ -963,6 +1017,20 @@
                         <!-- Loaded dynamically -->
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Cognitive Architecture — Memory Graph -->
+        <div class="glass-panel" id="memory-graph-panel" style="padding: 24px; margin-bottom: 30px;">
+            <div class="panel-header">
+                <div>
+                    <h2>🧠 Cognitive Architecture</h2>
+                    <p class="panel-subtitle">Memory graph nodes and data flow — live from <code>.ai-memory/token-memory-graph.json</code></p>
+                </div>
+                <div class="obs-meta" id="mg-schema">schema 2</div>
+            </div>
+            <div id="mg-container" style="position:relative;min-height:320px;">
+                <!-- Rendered by JS -->
             </div>
         </div>
 
@@ -1334,12 +1402,92 @@
             container.appendChild(frag);
         }
         
+        // Memory Graph Renderer
+        function renderMemoryGraph() {
+            var mg = window.TOKENSO_DATA.memoryGraph || {};
+            var container = document.getElementById('mg-container');
+            var schemaEl = document.getElementById('mg-schema');
+            if (!container) return;
+            if (!mg || !mg.nodes || Object.keys(mg.nodes).length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">No memory graph data. Run <code>tk save</code> to generate.</div>';
+                return;
+            }
+            if (schemaEl) schemaEl.textContent = 'schema ' + (mg.schema || '?');
+
+            var nodeDefs = {
+                workspace_code: { label: 'Workspace Code', icon: '📁', color: '#00f0ff' },
+                semantic_map:   { label: 'Semantic Map',   icon: '🗺️', color: '#00e676' },
+                token_memory:   { label: 'Token Memory',   icon: '🧠', color: '#ff6b6b' },
+                observed_metrics: { label: 'Observed Metrics', icon: '📊', color: '#ffd60a' },
+                memory_state:   { label: 'Memory State',   icon: '📝', color: '#bf5af2' },
+                milestone_analysis: { label: 'Milestone Analysis', icon: '🎯', color: '#ff9500' },
+                context_rules:  { label: 'Context Rules',  icon: '📜', color: '#bf5af2' },
+                tokenso_core:   { label: 'Tokenso Core',   icon: '⚡', color: '#00f0ff' }
+            };
+
+            // Layout positions (2 rows, centered)
+            var positions = {
+                workspace_code:  { x: 80,  y: 60 },
+                semantic_map:    { x: 80,  y: 200 },
+                token_memory:    { x: 320, y: 60 },
+                observed_metrics:{ x: 320, y: 200 },
+                memory_state:    { x: 560, y: 60 },
+                milestone_analysis: { x: 560, y: 200 },
+                context_rules:   { x: 800, y: 60 },
+                tokenso_core:    { x: 800, y: 200 }
+            };
+
+            var svgW = 920, svgH = 290;
+            var html = '<svg width="100%" viewBox="0 0 ' + svgW + ' ' + svgH + '" style="overflow:visible;">';
+
+            // Draw edges
+            var edges = mg.edges || [];
+            edges.forEach(function(e) {
+                var from = positions[e.from];
+                var to = positions[e.to];
+                if (!from || !to) return;
+                var fc = (nodeDefs[e.from] || {}).color || '#555';
+                html += '<line x1="' + (from.x+60) + '" y1="' + (from.y+35) + '" x2="' + (to.x+60) + '" y2="' + (to.y+15) + '" stroke="' + fc + '" stroke-width="1.5" stroke-opacity="0.3" stroke-dasharray="4 3"><animate attributeName="stroke-dashoffset" from="0" to="-14" dur="2s" repeatCount="indefinite"/></line>';
+            });
+
+            // Draw nodes
+            Object.keys(mg.nodes).forEach(function(key) {
+                var pos = positions[key];
+                if (!pos) return;
+                var def = nodeDefs[key] || { label: key, icon: '🔵', color: '#888' };
+                var data = mg.nodes[key];
+                var detail = '';
+                if (key === 'workspace_code') detail = (data.raw_tokens||0).toLocaleString() + ' tokens · ' + (data.files||0) + ' files';
+                else if (key === 'semantic_map') detail = (data.map_tokens||0).toLocaleString() + ' tokens · ' + (data.compression_pct||0) + '% reduction';
+                else if (key === 'token_memory') {
+                    detail = (data.sessions||0) + ' sessions · ' + (data.trend||'stable');
+                    var trendColor = data.trend === 'improving' ? '#00e676' : data.trend === 'declining' ? '#ff6b6b' : '#ffd60a';
+                    detail += ' <span style="color:' + trendColor + '">●</span>';
+                }
+                else if (key === 'observed_metrics') detail = (data.total_reads||0) + ' reads · ' + (data.total_edits||0) + ' edits';
+                else if (key === 'memory_state') detail = (data.milestones||[]).length + ' milestones';
+                else if (key === 'milestone_analysis') detail = (data.total_milestones||0) + ' total · low signal: ' + (data.has_low_signal ? '⚠️' : '✓');
+                else if (key === 'context_rules') detail = ((data.active_agents||'').substring(0,35)) + '…';
+                else if (key === 'tokenso_core') detail = 'v' + (data.version||'?');
+
+                html += '<g class="mg-node" style="cursor:pointer;" tabindex="0" role="button" aria-label="' + def.label + ': ' + detail + '">';
+                html += '<rect x="' + pos.x + '" y="' + pos.y + '" width="160" height="55" rx="12" fill="rgba(20,24,38,0.7)" stroke="' + def.color + '" stroke-width="1.5" stroke-opacity="0.5"/>';
+                html += '<text x="' + (pos.x+12) + '" y="' + (pos.y+22) + '" fill="' + def.color + '" font-size="14" font-weight="600">' + def.icon + ' ' + def.label + '</text>';
+                html += '<text x="' + (pos.x+12) + '" y="' + (pos.y+42) + '" fill="var(--text-dim)" font-size="10" font-family="var(--font-mono)">' + detail + '</text>';
+                html += '</g>';
+            });
+
+            html += '</svg>';
+            container.innerHTML = html;
+        }
+        renderMemoryGraph();
+
         // ROI Simulator engine
         const models = {
-            sonnet: { name: 'Claude Sonnet 4', rate: 3.00 },
-            opus: { name: 'Claude Opus 4', rate: 15.00 },
-            gemini: { name: 'Gemini 2.5 Pro', rate: 1.25 },
-            gpt4o: { name: 'GPT-4.1', rate: 2.00 }
+            fable: { name: 'Claude Fable 5', rate: 10.00 },
+            opus: { name: 'Claude Opus 4.8', rate: 5.00 },
+            sonnet: { name: 'Claude Sonnet 4.6', rate: 3.00 },
+            haiku: { name: 'Claude Haiku 4.5', rate: 1.00 }
         };
         let selectedModel = 'sonnet';
         
