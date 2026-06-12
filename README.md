@@ -4,7 +4,7 @@
 
 ### _Stop AI agents from wasting tokens, looping, and reading your entire codebase._
 
-[![Version](https://img.shields.io/badge/v3.10.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
+[![Version](https://img.shields.io/badge/v3.11.0-00bcd4?style=for-the-badge&logo=checkmark&label=version)](https://github.com/Basharlouzon/Token-save---optimizer)
 [![License](https://img.shields.io/badge/MIT-00e676?style=for-the-badge&label=license)](LICENSE)
 [![Shell](https://img.shields.io/badge/pure%20bash-100%25-4a90d9?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![AI Tools](https://img.shields.io/badge/compatible-16%2B-ff6b6b?style=for-the-badge&logo=ai&label=AI%20tools)]()
@@ -26,9 +26,19 @@ Tokenso puts your AI coding agents on a strict search diet with a persistent mem
 
 ---
 
-## 🆕 What's New in 3.10.0
+## 🆕 What's New in 3.11.0
 
-> **`tk run` is now the Claude Code cockpit** — the cognitive mindmap surfaces your live integration state and tells you what to do next
+> **Command polish** — the help screen is now grouped by purpose, with focused per-command help and `tokenso claude` subcommands
+
+| Feature                       | Description                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------|
+| 🗂️ **Grouped help**           | Commands organized into Setup & Memory, Explore & Search, Claude Code, Stats & Reports, Maintenance                |
+| 📖 **`tokenso help <cmd>`**   | Focused usage + examples for a single command                                                                      |
+| 🤖 **`tokenso claude` subs**  | `claude pause` / `claude resume` / `claude budget` group the plan-usage controls; top-level aliases still work     |
+
+### v3.10.0 — `tk run` Claude Code Cockpit
+
+> The cognitive mindmap surfaces your live integration state (hooks/pause/budget) and tells you what to do next
 
 | Feature                       | Description                                                                                                       |
 | ----------------------------- | -----------------------------------------------------------------------------------------------------------------|

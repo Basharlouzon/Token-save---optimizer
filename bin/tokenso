@@ -11,7 +11,7 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-VERSION="3.10.0"
+VERSION="3.11.0"
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 ESC=$(printf '\033')
@@ -753,33 +753,64 @@ show_dashboard() {
     _show_commands
 }
 
+# Focused help for a single command: tokenso help <command>
+show_command_help() {
+    local c="$1"
+    case "$c" in
+        claude) run_claude help; return ;;
+        search)  echo -e "${BOLD}tokenso search <query>${NC}\n  Zero-waste codebase search — finds filenames/symbols before you read.\n  ${DIM}e.g. tokenso search run_budget${NC}" ;;
+        symbols) echo -e "${BOLD}tokenso symbols [name]${NC}\n  View/filter the symbol map (path:line<TAB>kind<TAB>name). Jump straight to the line.\n  ${DIM}e.g. tokenso symbols run_claude${NC}" ;;
+        budget)  echo -e "${BOLD}tokenso budget <N>|off${NC}\n  Cap estimated reads per Claude Code session; auto-pause at 100%, warn at 80%.\n  ${DIM}e.g. tokenso budget 100k  ·  tokenso budget off${NC}" ;;
+        pause)   echo -e "${BOLD}tokenso pause [reason]${NC}\n  Hard-block all Claude Code prompts/tools in this project until \`tokenso resume\`.\n  ${DIM}Needs gate hooks: tokenso claude install${NC}" ;;
+        resume)  echo -e "${BOLD}tokenso resume${NC}\n  Lift a pause (manual or budget-triggered)." ;;
+        wrap)    echo -e "${BOLD}tokenso wrap <agent> …${NC}\n  Run an agent CLI and record real session metrics.\n  ${DIM}e.g. tokenso wrap claude -p '...' --output-format stream-json${NC}" ;;
+        stats)   echo -e "${BOLD}tokenso stats [--json|--csv|--html]${NC}\n  Detailed savings report across sessions." ;;
+        smart)   echo -e "${BOLD}tokenso smart [--json] [--fix]${NC}\n  AI agent autopilot: auto-init, refresh stale maps, save stats, lint, report." ;;
+        save|map|state|brief|graph|sessions|install|watch|status|doctor|update|clean|reset|run)
+                 echo -e "${BOLD}tokenso $c${NC} — see the grouped list: ${CYAN}tokenso help${NC}" ;;
+        *)
+            warn "no command '$c'. Run ${CYAN}tokenso help${NC} for the full list."
+            return 1
+            ;;
+    esac
+}
+
 _show_commands() {
     echo -e "  ${BOLD}── COMMANDS ─────────────────────────────────────────${NC}"
-    echo -e "  ${DIM}Tip: a short alias \`tk\` is installed alongside — e.g. \`tk smart\`, \`tk wrap …\`.${NC}"
-    echo -e "  ${CYAN}run${NC}       Interactive cognitive mindmap search & stats save"
-    echo -e "  ${CYAN}install${NC}   Interactive or non-interactive setup for this project"
-    echo -e "  ${CYAN}save${NC}      Update repository map & save/update token stats"
-    echo -e "  ${CYAN}search${NC}    Zero-waste local query codebase search"
-    echo -e "  ${CYAN}state${NC}     View and edit your AI Memory checklist"
-    echo -e "  ${CYAN}map${NC}       Visualize colorized codebase structure tree"
-    echo -e "  ${CYAN}stats${NC}     Detailed savings report (supports --json/--csv/--html flags)"
-    echo -e "  ${CYAN}clean${NC}     Safely wipe Tokenso cache for this project"
-    echo -e "  ${CYAN}reset${NC}     Clear cumulative stats history"
-    echo -e "  ${CYAN}update${NC}    Pull latest version from GitHub"
-    echo -e "  ${CYAN}doctor${NC}    Run environment diagnostics"
-    echo -e "  ${CYAN}status${NC}    Quick one-line project health check"
-    echo -e "  ${CYAN}watch${NC}     Background auto-save on file changes (start/stop/status)"
-    echo -e "  ${CYAN}smart${NC}     AI agent autopilot: auto-init, refresh, save, diagnose, report"
-    echo -e "  ${CYAN}symbols${NC}   View/filter the symbol map (function/class/type index)"
-    echo -e "  ${CYAN}wrap${NC}      Run an agent CLI and record real session metrics (e.g. ${DIM}tokenso wrap claude -p ... --output-format stream-json${NC})"
-    echo -e "  ${CYAN}brief${NC}     Auto-generate architecture briefing for AI agents"
-    echo -e "  ${CYAN}graph${NC}     Read token memory graph (use --json for raw)"
-    echo -e "  ${CYAN}sessions${NC}  List past wrapped sessions"
-    echo -e "  ${CYAN}claude${NC}    Native Claude Code hooks + statusline (install/status/uninstall)"
-    echo -e "  ${CYAN}pause${NC}     Hard-block all Claude Code usage in this project (protect plan quota)"
-    echo -e "  ${CYAN}resume${NC}    Lift the pause — Claude Code can work again"
-    echo -e "  ${CYAN}budget${NC}    Cap estimated reads/session; auto-pause on cross (${DIM}tokenso budget 100k${NC})"
-    echo -e "  ${CYAN}help${NC}      Show this screen"
+    echo -e "  ${DIM}Short alias \`tk\` works everywhere — e.g. \`tk smart\`. Run \`tokenso help <command>\` for details.${NC}"
+    echo ""
+    echo -e "  ${BOLD}${BCYAN}Setup & Memory${NC}"
+    echo -e "    ${CYAN}install${NC}   Interactive or non-interactive setup for this project"
+    echo -e "    ${CYAN}smart${NC}     AI agent autopilot: auto-init, refresh, save, diagnose, report"
+    echo -e "    ${CYAN}save${NC}      Update repository map & save/update token stats"
+    echo -e "    ${CYAN}state${NC}     View and edit your AI Memory checklist"
+    echo -e "    ${CYAN}watch${NC}     Background auto-save on file changes (start/stop/status)"
+    echo ""
+    echo -e "  ${BOLD}${BGREEN}Explore & Search${NC}"
+    echo -e "    ${CYAN}search${NC}    Zero-waste local query codebase search"
+    echo -e "    ${CYAN}symbols${NC}   View/filter the symbol map (function/class/type index)"
+    echo -e "    ${CYAN}map${NC}       Visualize colorized codebase structure tree"
+    echo -e "    ${CYAN}brief${NC}     Auto-generate architecture briefing for AI agents"
+    echo -e "    ${CYAN}run${NC}       Interactive cognitive mindmap + integration cockpit"
+    echo ""
+    echo -e "  ${BOLD}${MAGENTA}Claude Code${NC}  ${DIM}(plan-usage controls)${NC}"
+    echo -e "    ${CYAN}claude${NC}    Hooks + statusline + pause/budget (${DIM}install/status/pause/budget…${NC})"
+    echo -e "    ${CYAN}pause${NC}     Hard-block all usage in this project ${DIM}(alias: claude pause)${NC}"
+    echo -e "    ${CYAN}resume${NC}    Lift the pause ${DIM}(alias: claude resume)${NC}"
+    echo -e "    ${CYAN}budget${NC}    Cap estimated reads/session, auto-pause on cross ${DIM}(alias: claude budget)${NC}"
+    echo ""
+    echo -e "  ${BOLD}${BRED}Stats & Reports${NC}"
+    echo -e "    ${CYAN}stats${NC}     Detailed savings report (${DIM}--json/--csv/--html${NC})"
+    echo -e "    ${CYAN}graph${NC}     Read token memory graph (${DIM}--json${NC} for raw)"
+    echo -e "    ${CYAN}sessions${NC}  List past wrapped sessions"
+    echo -e "    ${CYAN}wrap${NC}      Run an agent CLI and record real session metrics"
+    echo ""
+    echo -e "  ${BOLD}${YELLOW}Maintenance${NC}"
+    echo -e "    ${CYAN}status${NC}    Quick one-line project health check"
+    echo -e "    ${CYAN}doctor${NC}    Run environment diagnostics"
+    echo -e "    ${CYAN}update${NC}    Pull latest version from GitHub"
+    echo -e "    ${CYAN}clean${NC}     Safely wipe Tokenso cache    ${CYAN}reset${NC}  Clear stats history"
+    echo -e "    ${CYAN}help${NC}      Show this screen (${DIM}help <command>${NC} for one command)"
     echo ""
 }
 
@@ -6038,6 +6069,12 @@ PY_EOF
 run_claude() {
     local sub="${1:-status}"
     [ $# -gt 0 ] && shift
+    # Pass-through subcommands keep their own args intact (before --local stripping).
+    case "$sub" in
+        pause)   run_pause "$@"; return $? ;;
+        resume)  run_resume "$@"; return $? ;;
+        budget)  run_budget "$@"; return $? ;;
+    esac
     local target=".claude/settings.json"
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -6076,13 +6113,16 @@ run_claude() {
             fi
             ;;
         help|--help|-h)
-            echo -e "${BOLD}tokenso claude${NC} — native Claude Code integration (hooks + statusline)"
+            echo -e "${BOLD}tokenso claude${NC} — native Claude Code integration (plan-usage controls)"
             echo -e "  ${CYAN}install${NC}    [--local]  Merge Tokenso hooks into .claude/settings.json"
-            echo -e "  ${CYAN}status${NC}     [--local]  Show which Tokenso hooks are active"
+            echo -e "  ${CYAN}status${NC}     [--local]  Show active hooks + pause/budget state"
             echo -e "  ${CYAN}uninstall${NC}  [--local]  Remove only Tokenso-owned hooks"
+            echo -e "  ${CYAN}pause${NC}      [reason]   Hard-block all usage until resumed"
+            echo -e "  ${CYAN}resume${NC}                Lift the pause"
+            echo -e "  ${CYAN}budget${NC}     <N>|off    Cap estimated reads/session (e.g. 100k)"
             ;;
         *)
-            die "unknown subcommand: 'claude $sub' (expected install|status|uninstall)"
+            die "unknown subcommand: 'claude $sub' (expected install|status|uninstall|pause|resume|budget)"
             ;;
     esac
 }
@@ -6178,7 +6218,14 @@ case "$1" in
         run_budget "$@"
         ;;
     --version|-v)     show_version ;;
-    help|--help|-h)   show_dashboard ;;
+    help|--help|-h)
+        shift
+        if [ $# -gt 0 ]; then
+            show_command_help "$1"
+        else
+            show_dashboard
+        fi
+        ;;
     "")               show_dashboard ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"
